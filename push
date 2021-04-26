@@ -1,0 +1,18 @@
+#!bin/bash
+#    Copyright (c) 2021 on-keyday
+#    Released under the MIT license
+#    https://opensource.org/licenses/mit-license.php
+. setting/common_setting.sh
+if [ "$PUBLISH_DIR" ]; then
+python common/license/add_to_script.py $PUBLISH_DIR $LICENSE_FILE
+cd $PUBLISH_DIR
+pwd
+fi
+NAME=""
+echo input commit name
+read NAME
+today=$(date "+%Y%m%d%H%M%S")
+echo "$today-$NAME"
+git add .
+git commit -m "$today-$NAME"
+git push origin main

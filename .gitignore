@@ -1,0 +1,7 @@
+cl_build/src
+cl_build/built
+clang_build/src
+clang_build/built
+gcc_build/src
+gcc_build/built
+**/__pycache__

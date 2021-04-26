@@ -1,0 +1,10 @@
+func f(num){
+	if num<=1 {
+		return num;
+	}
+	return f(num-2)+f(num-1);
+}
+
+ret=new MsgInvoke();
+
+ret.show("Test Message");

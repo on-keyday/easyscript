@@ -1,3 +1,9 @@
+/*
+    Copyright (c) 2021 on-keyday
+    Released under the MIT license
+    https://opensource.org/licenses/mit-license.php
+*/
+
 #include"interpret.h"
 #include"default_operator.h"
 #include<cfenv>
@@ -6,9 +12,15 @@ using namespace PROJECT_NAME;
 using namespace interpreter;
 using default_op::err;
 
-int interpreter::interpret(Reader<std::string>& reader,ValType* err){
+int interpreter::interpret(PROJECT_NAME::Reader<std::string>& reader,ValType* err,RegisterMap& base){
     IdTable global;
     global.global=&global;
+    for(auto i:base){
+        auto& ref=global.structs.table[i.first];
+        ref.proxy=i.second.first;
+        ref.ctx=i.second.second;
+        ref.name=i.first;
+    }
     auto val=interpret_detail(reader,global);
     auto res=val.second==EvalType::error?-1:0;
     if(err){
@@ -49,12 +61,12 @@ ValType interpreter::interpret_a_cmd(Command& cmd,IdTable& table,std::vector<Com
     */ 
     if(cmd.type==CmdType::returns){
         if(!cmd.expr)return {"none",EvalType::none};
-        auto val=interpret_tree(cmd.expr,table);
+        auto val=interpret_tree_invoke(cmd.expr,table);
         if(val.second==EvalType::function)return err("higer-order function not surpported.");
         return val;
     }
     else if(cmd.type==CmdType::expr){
-        auto val=interpret_tree(cmd.expr,table);
+        auto val=interpret_tree_invoke(cmd.expr,table);
         if(val.second==EvalType::error)return val;
         return succeed;
     }
@@ -84,7 +96,7 @@ ValType interpreter::interpret_a_cmd(Command& cmd,IdTable& table,std::vector<Com
 
 ValType interpreter::interpret_judge_do(Command& cmd,IdTable& table){
     ValType nodone={"(nodone)",EvalType::none};
-    auto i=interpreter::interpret_tree(cmd.expr,table);
+    auto i=interpreter::interpret_tree_invoke(cmd.expr,table);
     if(i.second==EvalType::error)return i;
     if(i.second!=EvalType::boolean){
         i=default_op::cast_val(EvalType::boolean,i);
@@ -97,6 +109,15 @@ ValType interpreter::interpret_judge_do(Command& cmd,IdTable& table){
         return interpret_block(cmd.unrated,intable);
     }
     return nodone;
+}
+
+ValType interpreter::interpret_tree_invoke(Tree* tree,IdTable& table){
+    auto ret=interpret_tree(tree,table);
+    if(ret.second==EvalType::error)return ret;
+    ValType* transform=nullptr;
+    ret=get_computable_value(ret,table,transform);
+    if(ret.second==EvalType::error)return ret;
+    return *transform;
 }
 
 ValType interpreter::interpret_tree(Tree* tree,IdTable& table){
@@ -162,7 +183,7 @@ ValType interpreter::interpret_tree(Tree* tree,IdTable& table){
             if(e.second==EvalType::error)return e;
             std::string funcname;
             check.readwhile(funcname,untilincondition,is_c_id_usable<char>);
-            if(funcname=="")return err("");
+            if(funcname=="")return err("not match for functionname:"+check.ref());
             return inst->call_membfunc(funcname,table,tree);
         }
     }
@@ -179,12 +200,7 @@ ValType interpreter::interpret_create(Tree* tree,IdTable& table){
     auto name=tree->right->right->symbol;
     auto type=table.find_struct(name);
     if(!type)return err("struct "+name+"not defined.");
-    bool first=true;
-    ValType errhandle;
-    size_t num=0;
-    if(!type->new_instance(tree,num,errhandle))return errhandle;
-    name.append("("+std::to_string(num)+")");
-    return {name,EvalType::user};
+    return type->new_instance(tree,table);
 }
 
 ValType interpreter::interpret_assign(Tree* tree,IdTable& table,ValType& leftval,ValType& rightval){
@@ -229,7 +245,7 @@ ValType interpreter::call_function(Tree* args,IdTable& table,Command* sentence){
     IdTable infunctable;
     size_t i=0;
     for(auto& ref:sentence->args){
-        auto arg=interpret_tree(args->arg[i],table);
+        auto arg=interpret_tree_invoke(args->arg[i],table);
         if(arg.second==EvalType::error)return arg;
         infunctable.vars.assign(ref,arg);
     }

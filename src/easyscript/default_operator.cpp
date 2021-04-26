@@ -1,6 +1,12 @@
+/*
+    Copyright (c) 2021 on-keyday
+    Released under the MIT license
+    https://opensource.org/licenses/mit-license.php
+*/
+
 #include"default_operator.h"
 #include<cfenv>
-#pragma STDC FENV_ACCESS ON
+//#pragma STDC FENV_ACCESS ON
 
 auto default_op::err(const std::string& msg)->ValType {return {msg,EvalType::error}; }
 

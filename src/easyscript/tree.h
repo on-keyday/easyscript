@@ -1,3 +1,9 @@
+/*
+    Copyright (c) 2021 on-keyday
+    Released under the MIT license
+    https://opensource.org/licenses/mit-license.php
+*/
+
 #pragma once
 #include"../reader.h"
 #include"../reader_helper.h"
@@ -149,11 +155,13 @@ struct Struct{
     FuncTable funcs;
     VarTable inits;
     std::map<size_t,Instance> instances;
+    size_t instcount=0;
     Proxy proxy;
     void* ctx;
-    bool new_instance(Tree* constructor_arg,size_t& num,ValType& msg);
+    ValType new_instance(Tree* constructor_arg,IdTable& table);
     ValType call_proxy(size_t id,IdTable& func,Tree* arg);
     ValType find(const std::string& name){
+        if(proxy)return {name,EvalType::memberfunc};
         if(inits.find(name)){
             return {name,EvalType::membervar};
         }

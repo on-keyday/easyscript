@@ -1,3 +1,9 @@
+/*
+    Copyright (c) 2021 on-keyday
+    Released under the MIT license
+    https://opensource.org/licenses/mit-license.php
+*/
+
 #pragma once
 #ifndef DLL_EXPORT 
 #define DLL_EXPORT __declspec(dllimport)
@@ -17,7 +23,7 @@ extern"C"{
     DLL_EXPORT int STDCALL add_sourece_from_file(Script* self,const char* filename);
 
     typedef int(*ObjProxy)(char* result,void* ctx,const char* membname,int argc,const char** argv);
-    
+
     DLL_EXPORT int STDCALL add_builtin_object(Script* self,const char* objname,ObjProxy proxy,void* ctx);
 
     DLL_EXPORT int STDCALL execute(Script* self,unsigned char flag);

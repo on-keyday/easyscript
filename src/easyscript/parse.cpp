@@ -1,3 +1,9 @@
+/*
+    Copyright (c) 2021 on-keyday
+    Released under the MIT license
+    https://opensource.org/licenses/mit-license.php
+*/
+
 #include"parse.h"
 using namespace PROJECT_NAME;
 
@@ -81,7 +87,7 @@ bool parse_var(Command& cmd,Reader<std::string>& reader){
     }*/
     cmd.type=CmdType::expr;
     Tree* exp=nullptr;
-    if(reader.expect("new",is_c_id_usable)){
+    /*if(reader.expect("new",is_c_id_usable)){
         auto tmp=parse_expr(reader);
         if(tmp->symbol!="()"||!tmp->right||tmp->right->type!=EvalType::function){
             delete tmp;
@@ -93,10 +99,10 @@ bool parse_var(Command& cmd,Reader<std::string>& reader){
             return false;
         }
     }
-    else{
+    else{*/
         exp=parse_expr(reader);
         if(!exp)return false;
-    }
+    //}
     cmd.expr=exp;
     //cmds.push_back(std::move(cmd));
     return true;

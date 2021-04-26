@@ -1,3 +1,9 @@
+/*
+    Copyright (c) 2021 on-keyday
+    Released under the MIT license
+    https://opensource.org/licenses/mit-license.php
+*/
+
 #define DLL_EXPORT __declspec(dllexport)
 #include"interpret.h"
 #include"script.h"
@@ -7,6 +13,7 @@ struct Script
 {
     PROJECT_NAME::Reader<std::string> reader;
     ValType result;
+    interpreter::RegisterMap base;
 };
 
 
@@ -37,11 +44,19 @@ int STDCALL add_sourece_from_file(Script* self,const char* filename){
     return 1;
 }
 
+int STDCALL add_builtin_object(Script* self,const char* objname,ObjProxy proxy,void* ctx){
+    if(!self||!objname||!proxy||!ctx){
+        return 0;
+    }
+    self->base[objname]={proxy,ctx};
+    return 1;
+}
+
 int STDCALL execute(Script* self,unsigned char flag){
     if(!self)return 0;
     self->reader.set_ignore(PROJECT_NAME::ignore_c_comments);
     auto beginpos=self->reader.readpos();
-    auto res=interpreter::interpret(self->reader,&self->result);
+    auto res=interpreter::interpret(self->reader,&self->result,self->base);
     if(res!=0&&flag&0x01){
         self->reader.seek(beginpos);
     }

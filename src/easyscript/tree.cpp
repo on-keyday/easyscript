@@ -1,3 +1,9 @@
+/*
+    Copyright (c) 2021 on-keyday
+    Released under the MIT license
+    https://opensource.org/licenses/mit-license.php
+*/
+
 #include"tree.h"
 #include"default_operator.h"
 #include"interpret.h"
@@ -9,8 +15,18 @@ bool op_expect(PROJECT_NAME::Reader<std::string>& reader,const char*& expected){
     return false;
 }
 
-bool Struct::new_instance(Tree* constructor_arg,size_t& num,ValType& msg){
-    return false;
+ValType Struct::new_instance(Tree* constructor_arg,IdTable& table){
+    auto& ref=this->instances[instcount];
+    ref.id=instcount;
+    instcount++;
+    ref.base=this;
+    for(auto i:this->inits.table){
+        ref.member.assign(i.first,i.second);
+    }
+    if(this->find("__init__").second==EvalType::memberfunc){
+        auto res=ref.call_membfunc(name,table,constructor_arg);
+    }
+    return {this->name+"("+std::to_string(ref.id)+")",EvalType::user};
 }
 
 ValType Instance::call_membfunc(const std::string& name,IdTable& table,Tree* arg){
@@ -21,8 +37,13 @@ ValType Instance::call_membfunc(const std::string& name,IdTable& table,Tree* arg
     if(!func)return err(name+" is not member function of "+base->name);
     IdTable selftable;
     selftable.global=table.global;
-    selftable.vars.assign("self",{base->name+"("+std::to_string(id)+")",EvalType::user});
+    ValType self={base->name+"("+std::to_string(id)+")",EvalType::user};
+    selftable.vars.assign("self",self);
     return interpreter::call_function(arg,table,func);
+}
+
+ValType Struct::call_proxy(size_t id,IdTable& func,Tree* arg){
+    return err("unimplemented");
 }
 
 Tree* expression(Reader<std::string>& reader){
@@ -130,6 +151,18 @@ Tree* number_or_id(Reader<std::string>& reader){
             ret=make<Tree>(num,EvalType::integer);
         }
         if(!ret)return nullptr;
+    }
+    else if(reader.expect("new",is_c_id_usable)){
+        auto tmp=parse_expr(reader);
+        if(tmp->symbol!="()"||!tmp->right||tmp->right->type!=EvalType::function){
+            delete tmp;
+            return nullptr;
+        }
+        ret=make<Tree>("new",EvalType::create,nullptr,tmp);
+        if(!ret){
+            delete tmp;
+            return nullptr;
+        }
     }  
     else if(is_c_id_top_usable(reader.achar())){
         std::string id;

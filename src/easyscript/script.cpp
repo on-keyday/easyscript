@@ -96,6 +96,21 @@ const char* STDCALL get_arg_index(ArgContext* arg,size_t i){
                     else if(ref[i]=='t'){
                         tmp+="\t";
                     }
+                    else if(ref[i]=='a'){
+                        tmp+="\a";
+                    }
+                    else if(ref[i]=='b'){
+                        tmp+="\b";
+                    }
+                    else if(ref[i]=='v'){
+                        tmp+="\v";
+                    }
+                    else if(ref[i]=='f'){
+                        tmp+="\f";
+                    }
+                    else if(ref[i]=='e'){
+                        tmp+="\e";
+                    }
                     else{
                         tmp+=ref[i];
                     }

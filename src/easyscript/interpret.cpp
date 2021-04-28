@@ -114,6 +114,7 @@ ValType interpreter::interpret_judge_do(Command& cmd,IdTable& table){
 ValType interpreter::interpret_tree_invoke(Tree* tree,IdTable& table){
     auto ret=interpret_tree(tree,table);
     if(ret.second==EvalType::error)return ret;
+    if(ret.second==EvalType::none)return {"none",EvalType::none};
     ValType* transform=nullptr;
     auto tmp=get_computable_value(ret,table,transform);
     if(tmp.second==EvalType::error)return ret;
@@ -249,6 +250,7 @@ ValType interpreter::call_function(Tree* args,IdTable& table,Command* sentence){
             auto arg=interpret_tree_invoke(args->arg[i],table);
             if(arg.second==EvalType::error)return arg;
             infunctable.vars.assign(ref,arg);
+            i++;
         }
     }
     infunctable.global=table.global;

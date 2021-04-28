@@ -31,6 +31,9 @@ int User32Proxy(void* ctx,const char* membname,ArgContext* arg){
         if(!msg||!cap)return -1;
         MessageBoxA(nullptr,msg,cap,MB_ICONINFORMATION|MB_OKCANCEL);
     }
+    else if(name=="sleep"){
+        Sleep(1000);
+    }
     return 0;
 }
 

@@ -6,16 +6,43 @@ func f(num){
 }
 
 func g(name){
-	return "Hello "+name+"!";
+	return "Console>"+name+"\a";
+}
+
+func hook(self,msg){
+	self.MessageBoxA(0,msg,"User32",0);
 }
 
 user32=new User32();
 
-test="Hello World!";
-
-return user32.MessageBoxA(0,g("Atsushi"),"Test",0);
-
 console=new Console();
 
-console.println(g("World"));
-console.pause();
+hook(user32,"Hello Console!");
+
+user32.sleep();
+
+console.println(g("Hello User32! How are you?"));
+
+user32.sleep();
+
+hook(user32,"I'm fine! Thank you. And you?");
+
+user32.sleep();
+
+console.println(g("I'm great!"));
+
+user32.sleep();
+
+hook(user32,"Ok.I see.");
+
+user32.sleep();
+
+console.println(g("See you!"));
+
+user32.sleep();
+
+hook(user32,"See You Again!");
+
+user32.sleep();
+
+console.println(g("Bye!"));

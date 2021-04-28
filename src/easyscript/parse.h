@@ -21,7 +21,7 @@ bool parse(PROJECT_NAME::Reader<std::string>& reader,std::vector<Command>& cmdve
 
 bool parse_func(Command& cmd,PROJECT_NAME::Reader<std::string>& reader);
 
-bool parse_var(Command& cmd,PROJECT_NAME::Reader<std::string>& reader);
+bool parse_expr(Command& cmd,PROJECT_NAME::Reader<std::string>& reader);
 
 bool parse_delete(Command& cmd,PROJECT_NAME::Reader<std::string>& reader);
 
@@ -33,5 +33,5 @@ bool parse_return(Command& cmd,PROJECT_NAME::Reader<std::string>& reader);
 
 bool parse_unrated(PROJECT_NAME::Reader<std::string>& reader,std::string& str);
 
-Tree* parse_expr(PROJECT_NAME::Reader<std::string>& reader);
+//Tree* parse_expr(PROJECT_NAME::Reader<std::string>& reader);
 

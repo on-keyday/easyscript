@@ -13,6 +13,8 @@
 #include<iostream>
 #include"easyscript/script.h"
 
+#include<Windows.h>
+
 using namespace PROJECT_NAME;
 using strreader=Reader<std::string>;
 
@@ -20,11 +22,27 @@ struct DLL{
     void* handle=nullptr;
 };
 
-int DLLProxy(void* ctx,const char* membname,ArgContext* arg){
+int User32Proxy(void* ctx,const char* membname,ArgContext* arg){
     std::string name=membname;
     if(name=="__init__")return 0;
     if(name=="MessageBoxA"){
+        auto msg=get_arg_index(arg,1);
+        auto cap=get_arg_index(arg,2);
+        if(!msg||!cap)return -1;
+        MessageBoxA(nullptr,msg,cap,MB_ICONINFORMATION|MB_OKCANCEL);
+    }
+    return 0;
+}
 
+int ConsoleProxy(void* ctx,const char* membname,ArgContext* arg){
+    std::string name=membname;
+    if(name=="println"){
+        if(get_arg_index(arg,0)){
+            std::cout<< get_arg_index(arg,0) << "\n";
+        }
+    }
+    else if(name=="pause"){
+        ::system("pause");
     }
     return 0;
 }
@@ -44,7 +62,8 @@ int main(int argc,char** argv){
     auto script=make_script();
     if(!script)return -1;
     add_sourece_from_file(script,"D:\\CommonLib\\CommonLib2\\src\\easyscript\\easytest.ess");
-    add_builtin_object(script,"DLL",DLLProxy,&argc);
+    add_builtin_object(script,"User32",User32Proxy,&argc);
+    add_builtin_object(script,"Console",ConsoleProxy,&argc);
     execute(script,1);
     delete_script(script);
     return 0;

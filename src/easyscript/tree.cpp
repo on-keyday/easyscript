@@ -24,14 +24,14 @@ ValType Struct::new_instance(Tree* constructor_arg,IdTable& table){
         ref.member.assign(i.first,i.second);
     }
     if(this->find("__init__").second==EvalType::memberfunc){
-        auto res=ref.call_membfunc(name,table,constructor_arg);
+        auto res=ref.call_membfunc("__init__",table,constructor_arg);
     }
     return {this->name+"("+std::to_string(ref.id)+")",EvalType::user};
 }
 
 ValType Instance::call_membfunc(const std::string& name,IdTable& table,Tree* arg){
     if(base->proxy){
-        return base->call_proxy(id,table,arg);
+        return base->call_proxy(name,this,table,arg);
     }
     auto func=base->funcs.find(name);
     if(!func)return err(name+" is not member function of "+base->name);
@@ -42,8 +42,22 @@ ValType Instance::call_membfunc(const std::string& name,IdTable& table,Tree* arg
     return interpreter::call_function(arg,table,func);
 }
 
-ValType Struct::call_proxy(size_t id,IdTable& func,Tree* arg){
-    return err("unimplemented");
+Instance::~Instance(){
+    IdTable tmp;
+    call_membfunc("__delete__",tmp,nullptr);
+}
+
+ValType Struct::call_proxy(const std::string& name,Instance* id,IdTable& table,Tree* arg){
+    ArgContext argctx(table,id);
+    if(arg){
+        for(auto p:arg->arg){
+            auto argv=interpreter::interpret_tree_invoke(p,table);
+            if(argv.second==EvalType::error)return argv;
+            argctx.args.push_back(std::move(argv));
+        }
+    }
+    proxy(this->ctx,name.c_str(),&argctx);
+    return argctx.result;
 }
 
 Tree* expression(Reader<std::string>& reader){
@@ -153,8 +167,8 @@ Tree* number_or_id(Reader<std::string>& reader){
         if(!ret)return nullptr;
     }
     else if(reader.expect("new",is_c_id_usable)){
-        auto tmp=parse_expr(reader);
-        if(!tmp||tmp->symbol!="()"||!tmp->right||tmp->right->type!=EvalType::function){
+        auto tmp=expression(reader);
+        if(!tmp||tmp->symbol!="()"||!tmp->right){
             delete tmp;
             return nullptr;
         }
@@ -201,7 +215,7 @@ bool after(Tree*& ret,PROJECT_NAME::Reader<std::string>& reader){
                     return false;
                 }
             }
-            ret->type=EvalType::function;
+            //ret->type=EvalType::function;
             auto will=make<Tree>("()",EvalType::unknown,nullptr,ret);
             if(!will){
                 for(auto t:args){

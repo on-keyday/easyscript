@@ -147,10 +147,15 @@ struct Instance{
         return member.assign(name,value);
     }
     ValType call_membfunc(const std::string& name,IdTable& table,Tree* arg);
+    ~Instance();
 };
 
 struct ArgContext{
-
+    IdTable& table;
+    std::vector<ValType> args;
+    Instance* instance=nullptr;
+    ValType result={"",EvalType::none};
+    ArgContext(IdTable& table,Instance* inst):table(table),instance(inst){}
 };
 
 struct Struct{
@@ -163,7 +168,7 @@ struct Struct{
     Proxy proxy;
     void* ctx;
     ValType new_instance(Tree* constructor_arg,IdTable& table);
-    ValType call_proxy(size_t id,IdTable& func,Tree* arg);
+    ValType call_proxy(const std::string& name,Instance* id,IdTable& func,Tree* arg);
     ValType find(const std::string& name){
         if(proxy)return {name,EvalType::memberfunc};
         if(inits.find(name)){

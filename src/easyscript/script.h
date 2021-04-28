@@ -33,4 +33,6 @@ extern"C"{
     DLL_EXPORT const char* STDCALL get_result(Script* self);
 
     DLL_EXPORT int STDCALL delete_script(Script* self);
+
+    DLL_EXPORT const char* STDCALL get_arg_index(ArgContext* arg,size_t i);
 }

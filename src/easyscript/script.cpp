@@ -74,3 +74,41 @@ int STDCALL delete_script(Script* self){
     delete self;
     return 1;
 }
+
+const char* STDCALL get_arg_index(ArgContext* arg,size_t i){
+    if(!arg)return nullptr;
+    if(arg->args.size()<i)return nullptr;
+    if(arg->args[i].second==EvalType::str){
+        auto& ref=arg->args[i].first;
+        if(ref[0]=='\"'||ref[0]=='\''){
+            ref.erase(0,1);
+            ref.pop_back();
+            std::string tmp;
+            for(int i=0;i<ref.size();i++){
+                if(ref[i]=='\\'){
+                    i++;
+                    if(ref[i]=='n'){
+                        tmp+="\n";
+                    }
+                    else if(ref[i]=='r'){ 
+                        tmp+="\r";
+                    }
+                    else if(ref[i]=='t'){
+                        tmp+="\t";
+                    }
+                    else{
+                        tmp+=ref[i];
+                    }
+                }
+                else{
+                    tmp+=ref[i];
+                }
+            }
+            ref=tmp;
+        }
+        return ref.c_str();
+    }
+    else{
+        return arg->args[i].first.c_str();
+    }
+}

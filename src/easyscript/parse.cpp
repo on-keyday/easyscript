@@ -35,7 +35,7 @@ bool parse(Reader<std::string>& reader,std::vector<Command>& cmdvec){
        semicolon=true;
     }
     else{
-        res=parse_var(cmd,reader);
+        res=parse_expr(cmd,reader);
         semicolon=true;
     }
     if(res){
@@ -67,12 +67,12 @@ bool parse_func(Command& cmd,Reader<std::string>& reader){
     return true;
 }
 
-bool parse_var(Command& cmd,Reader<std::string>& reader){
+bool parse_expr(Command& cmd,Reader<std::string>& reader){
     /*cmd.type=CmdType::define;
     /*reader.readwhile(cmd.name,untilincondition,is_c_id_usable<char>);
     if(cmd.name=="")return false;
-    if(!reader.expect("="))return false;*/
-    /*if(is_c_id_top_usable(reader.achar())){
+    if(!reader.expect("="))return false;*
+    *if(is_c_id_top_usable(reader.achar())){
         auto beginpos=reader.readpos();
         std::string str;
         reader.readwhile(str,untilincondition,is_c_id_usable<char>);
@@ -84,9 +84,8 @@ bool parse_var(Command& cmd,Reader<std::string>& reader){
             reader.seek(beginpos);
             cmd.type=CmdType::expr;
         }
-    }*/
-    cmd.type=CmdType::expr;
-    Tree* exp=nullptr;
+    }*
+    
     /*if(reader.expect("new",is_c_id_usable)){
         auto tmp=parse_expr(reader);
         if(tmp->symbol!="()"||!tmp->right||tmp->right->type!=EvalType::function){
@@ -99,12 +98,14 @@ bool parse_var(Command& cmd,Reader<std::string>& reader){
             return false;
         }
     }
-    else{*/
-        exp=parse_expr(reader);
-        if(!exp)return false;
+    else{*
     //}
-    cmd.expr=exp;
-    //cmds.push_back(std::move(cmd));
+    //cmds.push_back(std::move(cmd));*/
+    cmd.type=CmdType::expr;
+    Tree* expr=nullptr;
+    expr=expression(reader);
+    if(!expr)return false;
+    cmd.expr=expr;
     return true;
 }
 
@@ -120,7 +121,7 @@ bool parse_delete(Command& cmd,Reader<std::string>& reader){
 bool parse_while(Command& cmd,PROJECT_NAME::Reader<std::string>& reader){
     cmd.type=CmdType::ctrl;
     cmd.name="while";
-    auto expr=parse_expr(reader);
+    auto expr=expression(reader);
     if(!expr)return false;
     if(!parse_unrated(reader,cmd.unrated)){
         delete expr;
@@ -134,7 +135,7 @@ bool parse_while(Command& cmd,PROJECT_NAME::Reader<std::string>& reader){
 size_t parse_if(Command& cmd,PROJECT_NAME::Reader<std::string>& reader,std::vector<Command>& cmds){
     cmd.type=CmdType::ctrl;
     cmd.name="if";
-    auto expr=parse_expr(reader);
+    auto expr=expression(reader);
     if(!expr)return 0;
     if(!parse_unrated(reader,cmd.unrated)){
         delete expr;
@@ -148,7 +149,7 @@ size_t parse_if(Command& cmd,PROJECT_NAME::Reader<std::string>& reader,std::vect
             Command tmp;
             tmp.type=CmdType::ctrl;
             tmp.name="elif";
-            expr=parse_expr(reader);
+            expr=expression(reader);
             if(!expr)return 0;
             if(!parse_unrated(reader,cmd.unrated)){
                 delete expr;
@@ -178,13 +179,13 @@ size_t parse_if(Command& cmd,PROJECT_NAME::Reader<std::string>& reader,std::vect
 bool parse_return(Command& cmd,PROJECT_NAME::Reader<std::string>& reader){
     cmd.type=CmdType::returns;
     auto expr=expression(reader);
-    if(expr){
+    /*if(expr){
         if(eval_tree(expr,nullptr)==EvalType::error){
             delete expr;
             return false;
-        }
+        }*/
         cmd.expr=expr;
-    }
+    //}
     //cmds.push_back(std::move(cmd));
     return true;
 }
@@ -201,12 +202,13 @@ bool parse_unrated(PROJECT_NAME::Reader<std::string>& reader,std::string& str){
     return true;
 }
 
+/*
 Tree* parse_expr(PROJECT_NAME::Reader<std::string>& reader){
     auto expr=expression(reader);
-    if(!expr)return nullptr;
+    /*if(!expr)return nullptr;
     if(eval_tree(expr,nullptr)==EvalType::error){
         delete expr;
         return nullptr;
-    }
+    }*
     return expr;
-}
+}*/

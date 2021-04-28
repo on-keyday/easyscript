@@ -81,7 +81,7 @@ ValType interpreter::interpret_a_cmd(Command& cmd,IdTable& table,std::vector<Com
         if(cmd.name=="if"){
             auto i=interpret_judge_do(cmd,table);
             if(i.first=="(nodone)"&&i.second==EvalType::none){
-
+                return succeed;
             }
             return i;
         }
@@ -134,9 +134,9 @@ ValType interpreter::interpret_tree(Tree* tree,IdTable& table){
     if(tree->type>=EvalType::boolean&&tree->type<=EvalType::str){
         return {tree->symbol,tree->type};
     }
-    if(tree->symbol!="()"&&tree->symbol!="."&&tree->type==EvalType::function){
+    /*if(tree->symbol!="()"&&tree->symbol!="."&&tree->type==EvalType::function){
         return {tree->symbol,EvalType::function};
-    }
+    }*/
     auto leftval=interpret_tree(tree->left,table);
     if(leftval.second==EvalType::error)return leftval;
     if(tree->symbol=="."){
@@ -164,14 +164,8 @@ ValType interpreter::interpret_tree(Tree* tree,IdTable& table){
     if(tree->symbol=="++"||tree->symbol=="--"){
         return interpret_incrdecr(tree,table,leftval,rightval);
     }
-    auto tmp=get_computable_value(rightval,table,transform);
-    if(tmp.second==EvalType::error)return tmp;
-    rightval=*transform;
-    if(tree->symbol=="="){
-        return interpret_assign(tree,table,leftval,rightval);
-    }
     if(tree->symbol=="()"){
-        if(rightval.second==EvalType::function){
+        if(rightval.second==EvalType::unknown){
             auto found=table.find_func(rightval.first);
             if(!found)return err(rightval.first+" is not function.");
             return call_function(tree,table,found);
@@ -186,6 +180,12 @@ ValType interpreter::interpret_tree(Tree* tree,IdTable& table){
             if(funcname=="")return err("not match for functionname:"+check.ref());
             return inst->call_membfunc(funcname,table,tree);
         }
+    }
+    auto tmp=get_computable_value(rightval,table,transform);
+    if(tmp.second==EvalType::error)return tmp;
+    rightval=*transform;
+    if(tree->symbol=="="){
+        return interpret_assign(tree,table,leftval,rightval);
     }
     auto e=get_computable_value(leftval,table,transform);
     if(e.second==EvalType::error)return e;
@@ -241,13 +241,15 @@ ValType interpreter::interpret_incrdecr(Tree* tree,IdTable& table,ValType& leftv
 
 ValType interpreter::call_function(Tree* args,IdTable& table,Command* sentence){
     if(!sentence)return err("no block exist.");
-    if(sentence->args.size()!=args->arg.size())return err("arg number not matched.");
+    if(args&&sentence->args.size()!=args->arg.size())return err("arg number not matched.");
     IdTable infunctable;
     size_t i=0;
-    for(auto& ref:sentence->args){
-        auto arg=interpret_tree_invoke(args->arg[i],table);
-        if(arg.second==EvalType::error)return arg;
-        infunctable.vars.assign(ref,arg);
+    if(args){
+        for(auto& ref:sentence->args){
+            auto arg=interpret_tree_invoke(args->arg[i],table);
+            if(arg.second==EvalType::error)return arg;
+            infunctable.vars.assign(ref,arg);
+        }
     }
     infunctable.global=table.global;
     return interpret_block(sentence->unrated,infunctable);

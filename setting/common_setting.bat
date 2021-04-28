@@ -11,3 +11,4 @@ set RUNEXECUTABLE=program
 set RUNCMDLINE=
 set PUBLISH_DIR=..\easyscript\
 set LICENSE_FILE=setting\template.txt
+set PUSH_ADD_OPT=-p

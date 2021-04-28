@@ -13,6 +13,6 @@ echo input commit name
 read NAME
 today=$(date "+%Y%m%d%H%M%S")
 echo "$today-$NAME"
-git add .
+git add $PUSH_ADD_OPT
 git commit -m "$today-$NAME"
 git push origin main

@@ -17,6 +17,6 @@ set time2=%time: =0%
 set NOWTIME=%time2:~0,2%%time2:~3,2%%time2:~6,2%%
 set FINAL="%TODAY%%NOWTIME%-%COMMIT_NAME%"
 echo %FINAL%
-git add .
+git add %PUSH_ADD_OPT%
 git commit -m %FINAL%
 git push origin main

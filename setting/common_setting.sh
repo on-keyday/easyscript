@@ -10,3 +10,4 @@ export RUNEXECUTABLE=program
 export RUNCMDLINE=
 export PUBLISH_DIR=../easyscript
 export LICENSE_FILE=setting/template.txt
+export PUSH_ADD_OPT=.

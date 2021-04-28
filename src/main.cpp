@@ -16,7 +16,16 @@
 using namespace PROJECT_NAME;
 using strreader=Reader<std::string>;
 
-int TestProxy(char* result,void* ctx,const char* membname,int argc,const char** argv){
+struct DLL{
+    void* handle=nullptr;
+};
+
+int DLLProxy(void* ctx,const char* membname,ArgContext* arg){
+    std::string name=membname;
+    if(name=="__init__")return 0;
+    if(name=="MessageBoxA"){
+
+    }
     return 0;
 }
 
@@ -34,8 +43,8 @@ int main(int argc,char** argv){
     sizeof(HTTPClient);*/
     auto script=make_script();
     if(!script)return -1;
-    add_sourece_from_file(script,"D:\\CommonLib\\CommonLib2\\src\\easyscript\\easytest.inn");
-    add_builtin_object(script,"MsgInvoke",TestProxy,&argc);
+    add_sourece_from_file(script,"D:\\CommonLib\\CommonLib2\\src\\easyscript\\easytest.ess");
+    add_builtin_object(script,"DLL",DLLProxy,&argc);
     execute(script,1);
     delete_script(script);
     return 0;

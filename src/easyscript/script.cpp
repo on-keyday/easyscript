@@ -9,6 +9,8 @@
 #include"script.h"
 #include<cstdio>
 
+
+using namespace PROJECT_NAME;
 struct Script
 {
     PROJECT_NAME::Reader<std::string> reader;
@@ -48,13 +50,17 @@ int STDCALL add_builtin_object(Script* self,const char* objname,ObjProxy proxy,v
     if(!self||!objname||!proxy||!ctx){
         return 0;
     }
+    PROJECT_NAME::Reader<std::string> check(objname);
+    if(!is_c_id_top_usable(check.achar()))return 0;
+    check.readwhile(untilincondition_nobuf,is_c_id_usable<char>);
+    if(!check.ceof())return 0;
     self->base[objname]={proxy,ctx};
     return 1;
 }
 
 int STDCALL execute(Script* self,unsigned char flag){
     if(!self)return 0;
-    self->reader.set_ignore(PROJECT_NAME::ignore_c_comments);
+    self->reader.set_ignore(ignore_c_comments);
     auto beginpos=self->reader.readpos();
     auto res=interpreter::interpret(self->reader,&self->result,self->base);
     if(res!=0&&flag&0x01){

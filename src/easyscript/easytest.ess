@@ -1,0 +1,10 @@
+func f(num){
+	if num<=1 {
+		return num;
+	}
+	return f(num-2)+f(num-1);
+}
+
+dll=new DLL("User32.dll");
+
+return dll.MessageBoxA(0,"Test Message","Test",0);

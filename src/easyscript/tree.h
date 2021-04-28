@@ -13,7 +13,7 @@
 
 enum class EvalType{
     error,
-    undefined,
+    //undefined,
     unknown,
     none,
     boolean,
@@ -149,8 +149,12 @@ struct Instance{
     ValType call_membfunc(const std::string& name,IdTable& table,Tree* arg);
 };
 
+struct ArgContext{
+
+};
+
 struct Struct{
-    using Proxy=int(*)(char* result,void* ctx,const char* membname,int argc,const char** argv);
+    using Proxy=int(*)(void* ctx,const char* membname,ArgContext* arg);
     std::string name;
     FuncTable funcs;
     VarTable inits;

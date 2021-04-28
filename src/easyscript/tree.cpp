@@ -154,7 +154,7 @@ Tree* number_or_id(Reader<std::string>& reader){
     }
     else if(reader.expect("new",is_c_id_usable)){
         auto tmp=parse_expr(reader);
-        if(tmp->symbol!="()"||!tmp->right||tmp->right->type!=EvalType::function){
+        if(!tmp||tmp->symbol!="()"||!tmp->right||tmp->right->type!=EvalType::function){
             delete tmp;
             return nullptr;
         }
@@ -237,7 +237,7 @@ bool after(Tree*& ret,PROJECT_NAME::Reader<std::string>& reader){
             continue;
         }
         else if(reader.expect("++",expected)||reader.expect("--",expected)){
-            auto tmp=make<Tree>(".",EvalType::unknown,nullptr,ret);
+            auto tmp=make<Tree>(expected,EvalType::unknown,nullptr,ret);
             if(!tmp){
                 delete ret;
                 return false;

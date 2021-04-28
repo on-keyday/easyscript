@@ -115,8 +115,8 @@ ValType interpreter::interpret_tree_invoke(Tree* tree,IdTable& table){
     auto ret=interpret_tree(tree,table);
     if(ret.second==EvalType::error)return ret;
     ValType* transform=nullptr;
-    ret=get_computable_value(ret,table,transform);
-    if(ret.second==EvalType::error)return ret;
+    auto tmp=get_computable_value(ret,table,transform);
+    if(tmp.second==EvalType::error)return ret;
     return *transform;
 }
 
@@ -138,7 +138,7 @@ ValType interpreter::interpret_tree(Tree* tree,IdTable& table){
         return {tree->symbol,EvalType::function};
     }
     auto leftval=interpret_tree(tree->left,table);
-    if(tree->symbol!="="&&leftval.second==EvalType::error)return leftval;
+    if(leftval.second==EvalType::error)return leftval;
     if(tree->symbol=="."){
         auto e=get_computable_value(leftval,table,transform);
         if(e.second==EvalType::error)return e;

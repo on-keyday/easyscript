@@ -24,15 +24,22 @@ struct DLL{
 
 int User32Proxy(void* ctx,const char* membname,ArgContext* arg){
     std::string name=membname;
-    if(name=="__init__")return 0;
+    if(name=="__init__"){
+        MessageBoxA(nullptr,std::to_string(get_instance_id(arg)).c_str(),"test",MB_ICONINFORMATION);
+        return 0;
+    }
     if(name=="MessageBoxA"){
         auto msg=get_arg_index(arg,1);
         auto cap=get_arg_index(arg,2);
-        if(!msg||!cap)return -1;
-        MessageBoxA(nullptr,msg,cap,MB_ICONINFORMATION|MB_OKCANCEL);
+        if(!msg||!cap){
+            set_result_error(arg,"arg not matched");
+            return -1;
+        }
+        MessageBoxA(nullptr,msg,cap,MB_ICONINFORMATION);
+        return 0;
     }
-    else if(name=="sleep"){
-        Sleep(1000);
+    if(name=="__delete__"){
+        MessageBoxA(nullptr,"delete object!","test",MB_ICONWARNING);
     }
     return 0;
 }
@@ -44,8 +51,17 @@ int ConsoleProxy(void* ctx,const char* membname,ArgContext* arg){
             std::cout<< get_arg_index(arg,0) << "\n";
         }
     }
-    else if(name=="pause"){
+
+    return 0;
+}
+
+int WaitProxy(void* ctx,const char* membname,ArgContext* arg){
+    std::string name=membname;
+    if(name=="pause"){
         ::system("pause");
+    }
+    else if(name=="sleep"){
+        Sleep(1000);
     }
     return 0;
 }
@@ -67,7 +83,9 @@ int main(int argc,char** argv){
     add_sourece_from_file(script,"D:\\CommonLib\\CommonLib2\\src\\easyscript\\easytest.ess");
     add_builtin_object(script,"User32",User32Proxy,&argc);
     add_builtin_object(script,"Console",ConsoleProxy,&argc);
+    add_builtin_object(script,"Wait",WaitProxy,&argc);
     execute(script,1);
+    std::cout << get_result(script)<< "\n";
     delete_script(script);
     return 0;
 }

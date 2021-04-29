@@ -1,48 +1,42 @@
-func f(num){
+/*func f(num){
 	if num<=1 {
 		return num;
 	}
 	return f(num-2)+f(num-1);
 }
+*/
 
-func g(name){
-	return "Console>"+name+"\a";
+func hook2(msg){
+	console.println("Console>"+msg);
+	user32.MessageBoxA(0,msg,"Console",0);
 }
 
-func hook(self,msg){
-	self.MessageBoxA(0,msg,"User32",0);
+func hook(msg){
+	console.println("User32>"+msg);
+	user32.MessageBoxA(0,msg,"User32",0);
 }
 
 user32=new User32();
 
 console=new Console();
 
-hook(user32,"Hello Console!");
+//(new Wait()).pause();
 
-user32.sleep();
+hook("Hello Console!");
 
-console.println(g("Hello User32! How are you?"));
+hook2("Hello User32! How are you?");
 
-user32.sleep();
+hook("I'm fine! Thank you. And you?");
 
-hook(user32,"I'm fine! Thank you. And you?");
+hook2("I'm great!");
 
-user32.sleep();
+hook("Ok.I see.");
 
-console.println(g("I'm great!"));
+hook2("See you!");
 
-user32.sleep();
+hook("See You Again!");
 
-hook(user32,"Ok.I see.");
+hook2("Bye!");
 
-user32.sleep();
+//wait.pause();
 
-console.println(g("See you!"));
-
-user32.sleep();
-
-hook(user32,"See You Again!");
-
-user32.sleep();
-
-console.println(g("Bye!"));

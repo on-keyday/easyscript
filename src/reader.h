@@ -270,7 +270,7 @@ namespace PROJECT_NAME{
 
         Buf& ref(){refed=true;return buf;}
 
-
+        /*
         bool depthblock(bool(*check)(Reader*,bool)=
             [](auto self,auto isbegin)->bool{
                 if(isbegin){
@@ -300,7 +300,7 @@ namespace PROJECT_NAME{
                 pos++;
             }
             return ok;
-        }
+        }*/
 
         template<class Ret>
         static bool read_string(Reader* self,Ret& buf,bool& noline,bool begin){

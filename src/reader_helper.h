@@ -335,6 +335,97 @@ namespace PROJECT_NAME{
         return false;
     }
 
+    template<class Buf,class Ctx>
+    bool depthblock(Reader<Buf>* self,Ctx& check,bool begin){
+        if(!self||!begin)return true;
+        if(!check(self,true))return false;
+        size_t dp=0;
+        bool ok=false;
+        while (!self->eof()) {  
+            if (check(self,true)) {
+                dp++;
+            }                
+            if (check(self,false)) {
+                if (dp == 0){
+                    ok=true;
+                    break;
+                }
+                dp--;
+            }
+        }
+        return ok;
+    }
+
+    template<class Buf,class Ret,class Ctx>
+    bool depthblock_withbuf(Reader<Buf>* self,Ret& ret,Ctx& check,bool begin){
+        if(!self||!begin)return true;
+        if(!check(self,true))return false;
+        size_t beginpos=self->readpos(),endpos=beginpos;
+        size_t dp=0;
+        bool ok=false;
+        while (!self->eof()) {
+            endpos=self->readpos();
+            if (check(self,true)) {
+                dp++;
+            }                
+            else if (check(self,false)) {
+                if (dp == 0){
+                    ok=true;
+                    break;
+                }
+                dp--;
+            }
+            self->increment();
+        }
+        if(ok){
+            auto finalpos=self->readpos();
+            self->seek(beginpos);
+            while(self->readpos()!=endpos){
+                ret.push_back(self->achar());
+                self->increment();
+            }
+            self->seek(finalpos);
+        }
+        return ok;
+    }
+
+    template<class Buf>
+    struct BasicBlock{
+        bool c_block=true;
+        bool arr_block=true;
+        bool bracket=true;
+        bool operator()(Reader<Buf>* self,bool begin){
+            bool ret=false;
+            if(c_block){
+                if(begin){
+                    ret=self->expect("{");
+                }
+                else{
+                    ret=self->expect("}");
+                }
+            }
+            if(!ret&&arr_block){
+                if(begin){
+                    ret=self->expect("[");
+                }
+                else{
+                    ret=self->expect("]");
+                }
+            }
+            if(!ret&&bracket){
+                if(begin){
+                    ret=self->expect("[");
+                }
+                else{
+                    ret=self->expect("]");
+                }
+            }
+            return ret;
+        }
+        BasicBlock(bool block=true,bool array=true,bool bracket=true):
+        c_block(block),arr_block(array),bracket(bracket){}
+    };
+
     template<class Buf,class Ret,class Char> 
     bool until(Reader<Buf>* self,Ret& ret,Char& ctx,bool begin){
         if(begin)return true;

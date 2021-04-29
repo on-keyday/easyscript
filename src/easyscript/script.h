@@ -35,4 +35,22 @@ extern"C"{
     DLL_EXPORT int STDCALL delete_script(Script* self);
 
     DLL_EXPORT const char* STDCALL get_arg_index(ArgContext* arg,size_t i);
+
+    DLL_EXPORT size_t STDCALL get_arg_len(ArgContext* arg);
+
+    DLL_EXPORT int STDCALL set_result_error(ArgContext* arg,const char* str);  
+
+    DLL_EXPORT int STDCALL set_result_bool(ArgContext* arg,int flag);
+
+    DLL_EXPORT int STDCALL set_result_int(ArgContext* arg,long long num);
+
+    DLL_EXPORT int STDCALL set_result_float(ArgContext* arg,double num);
+
+    DLL_EXPORT int STDCALL set_result_str_len(ArgContext* arg,const char* str,size_t len);
+
+    DLL_EXPORT int STDCALL set_result_str(ArgContext* arg,const char* str);
+
+    DLL_EXPORT int STDCALL set_result_none(ArgContext* arg);
+
+    DLL_EXPORT size_t STDCALL get_instance_id(ArgContext* arg);
 }

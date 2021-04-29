@@ -191,15 +191,16 @@ bool parse_return(Command& cmd,PROJECT_NAME::Reader<std::string>& reader){
 }
 
 bool parse_unrated(PROJECT_NAME::Reader<std::string>& reader,std::string& str){
-    auto beginpos=reader.readpos();
-    if(!reader.depthblock())return false;
-    auto endpos=reader.readpos();
+    return reader.readwhile(str,depthblock_withbuf,BasicBlock<std::string>(true,false,false));
+    /*    return false;
+    /*auto endpos=reader.readpos();
     reader.seek(beginpos);
+    
     while(reader.readpos()!=endpos){
         str.push_back(reader.achar());
         reader.increment();
-    }
-    return true;
+    }*
+    return true;*/
 }
 
 /*

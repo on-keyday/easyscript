@@ -25,6 +25,7 @@ ValType Struct::new_instance(Tree* constructor_arg,IdTable& table){
     }
     if(this->find("__init__").second==EvalType::memberfunc){
         auto res=ref.call_membfunc("__init__",table,constructor_arg);
+        if(res.second==EvalType::error)return res;
     }
     return {this->name+"("+std::to_string(ref.id)+")",EvalType::user};
 }

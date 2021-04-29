@@ -44,4 +44,8 @@ namespace interpreter{
     ValType get_var_val(std::string& name,IdTable& table,ValType*& val);
 
     ValType get_computable_value(ValType& type,IdTable& table,ValType*& val);
+
+    bool deescape_str(std::string& str);
+
+    bool enescape_str(std::string& str);
 }

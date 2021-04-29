@@ -69,6 +69,11 @@ int STDCALL execute(Script* self,unsigned char flag){
     return res;
 }
 
+const char* STDCALL get_result(Script* self){
+    if(!self)return nullptr;
+    return self->result.first.c_str();
+}
+
 int STDCALL delete_script(Script* self){
     if(!self)return 0;
     delete self;
@@ -81,7 +86,7 @@ const char* STDCALL get_arg_index(ArgContext* arg,size_t i){
     if(arg->args[i].second==EvalType::str){
         auto& ref=arg->args[i].first;
         if(ref[0]=='\"'||ref[0]=='\''){
-            ref.erase(0,1);
+            /*ref.erase(0,1);
             ref.pop_back();
             std::string tmp;
             for(int i=0;i<ref.size();i++){
@@ -108,9 +113,9 @@ const char* STDCALL get_arg_index(ArgContext* arg,size_t i){
                     else if(ref[i]=='f'){
                         tmp+="\f";
                     }
-                    else if(ref[i]=='e'){
+                    /*else if(ref[i]=='e'){
                         tmp+="\e";
-                    }
+                    }*
                     else{
                         tmp+=ref[i];
                     }
@@ -120,10 +125,69 @@ const char* STDCALL get_arg_index(ArgContext* arg,size_t i){
                 }
             }
             ref=tmp;
+        }*/
+            if(!interpreter::deescape_str(ref))return nullptr;
         }
         return ref.c_str();
     }
     else{
         return arg->args[i].first.c_str();
     }
+}
+
+size_t STDCALL get_arg_len(ArgContext* arg){
+    return !arg?0:arg->args.size();
+}
+
+int STDCALL set_result_error(ArgContext* arg,const char* str){
+    if(!arg||!str)return 0;
+    arg->result.first=str;
+    arg->result.second=EvalType::error;
+    return 1;
+}
+
+int STDCALL set_result_bool(ArgContext* arg,int flag){
+    if(!arg)return 0;
+    arg->result.first=flag?"true":"false";
+    arg->result.second=EvalType::boolean;
+    return 1;
+}
+
+int STDCALL set_result_int(ArgContext* arg,long long num){
+    if(!arg)return 0;
+    arg->result.first=std::to_string(num);
+    arg->result.second=EvalType::integer;
+    return 1;
+}
+
+int STDCALL set_result_float(ArgContext* arg,double num){
+    if(!arg)return 0;
+    arg->result.first=std::to_string(num);
+    arg->result.second=EvalType::floats;
+    return 1;
+}
+
+int STDCALL set_result_str_len(ArgContext* arg,const char* str,size_t len){
+    if(!arg||!str)return 0;
+    arg->result.first.assign(str,len);
+    interpreter::enescape_str(arg->result.first);
+    arg->result.second=EvalType::str;
+    return 1;
+}
+
+int STDCALL set_result_str(ArgContext* arg,const char* str){
+    if(!arg||!str)return 0;
+    return set_result_str_len(arg,str,strlen(str));
+}
+
+int STDCALL set_result_none(ArgContext* arg){
+    if(!arg)return 0;
+    arg->result.first="none";
+    arg->result.second=EvalType::none;
+    return true;
+}
+
+size_t STDCALL get_instance_id(ArgContext* arg){
+    if(!arg)return ~0;
+    return arg->instance->id;
 }

@@ -268,20 +268,23 @@ bool HTTPClient::read_body(Reader<std::string>& response,HTTPResponse<HeaderMap,
             if(str.find("json")!=std::string::npos){
                 response.set_ignore(ignore_space_line);
                 if(response.ahead("{")){
-                    while(!response.depthblock()){
+                    BasicBlock<std::string> check(true,false,false);
+                    while(!response.readwhile(depthblock,check)){
                         if(!sock.recv(response.ref()))return false;
                         response.seek(beginpos);
                     }
                 }
                 else if(response.ahead("[")){
-                    while(!response.depthblock([](auto self,bool begin)->bool{
+                    /*while(!response.depthblock([](auto self,bool begin)->bool{
                         if(begin){
                             return self->expect("[");
                         }
                         else{
                             return self->expect("]");
                         }
-                    })){
+                    }))*/
+                    BasicBlock<std::string> check(false,true,false);
+                    while(response.readwhile(depthblock,check)){
                         if(!sock.recv(response.ref()))return false;
                         response.seek(beginpos);
                     }

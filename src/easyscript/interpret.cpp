@@ -259,7 +259,7 @@ ValType interpreter::call_function(Tree* args,IdTable& table,Command* sentence){
 
 ValType interpreter::interpret_block(std::string& sentence,IdTable& table){
     Reader<std::string> willparse(sentence,ignore_c_comments);
-    if(!willparse.expect("{"))return err("unexpected token.expected {, but "+std::string(1,willparse.achar())+".");
+    //if(!willparse.expect("{"))return err("unexpected token.expected {, but "+std::string(1,willparse.achar())+".");
     auto result=interpret_detail(willparse,table);
     if(result.second==EvalType::error)return result;
     //if(!willparse.expect("}"))return err("unexpected token.expected }, but "+std::string(1,willparse.achar())+".");
@@ -330,4 +330,81 @@ ValType interpreter::get_computable_value(ValType& type,IdTable& table,ValType*&
         val=&type;
         return {"",EvalType::none};
     }
+}
+
+bool interpreter::deescape_str(std::string& ref){
+    if(ref[0]=='\"'||ref[0]=='\''){
+        ref.erase(0,1);
+        ref.pop_back();
+        std::string tmp;
+        auto check=[&ref](auto i){return i<ref.size();};
+        for(int i=0;check(i);i++){
+            if(ref[i]=='\\'){
+                if(!check(i+1))return "";
+                if(ref[i]=='n'){
+                    tmp+="\n";
+                }
+                else if(ref[i]=='r'){ 
+                    tmp+="\r";
+                }
+                else if(ref[i]=='t'){
+                    tmp+="\t";
+                }
+                else if(ref[i]=='a'){
+                    tmp+="\a";
+                }
+                else if(ref[i]=='b'){
+                    tmp+="\b";
+                }
+                else if(ref[i]=='v'){
+                    tmp+="\v";
+                }
+                else if(ref[i]=='f'){
+                    tmp+="\f";
+                }
+                /*else if(ref[i]=='e'){
+                    tmp+="\e";
+                }*/
+                else if(ref[i]=='x'){
+                    if(!check(i+2))return false;
+                    i++;
+                    if(!is_hex(ref[i])||!is_hex(ref[i+1]))return "";
+                    auto s=[](auto c){
+                        if(c>='A'&&c<='F')return c-'A'+10;
+                        if(c>='a'&&c<='f')return c-'a'+10;
+                        return c-'0';
+                    };
+                    unsigned char num=(s(ref[i])<<4)+s(ref[i+1]);
+                    i++;
+                    tmp+=num;
+                }
+                else if(ref[i]=='0'){
+                    tmp+="\0";
+                }
+                else{
+                    tmp+=ref[i];
+                }
+            }
+            else{
+                tmp+=ref[i];
+            }
+        }
+        ref=tmp;
+        return true;
+    }
+    return false;
+}
+
+bool interpreter::enescape_str(std::string& str){
+    std::string tmp;
+    tmp+="\"";
+    for(auto c:str){
+        if(c=='\\'||c=='\"'||c=='\''){
+            tmp+="\\";
+        }
+        tmp+=c;
+    }
+    tmp+="\"";
+    str=tmp;
+    return true;
 }

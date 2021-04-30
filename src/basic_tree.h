@@ -34,7 +34,7 @@ namespace PROJECT_NAME{
             return ret;
         }
         else{
-            return primary(self,ctx);
+            return primary<Tree>(self,ctx);
         }
     }
 
@@ -42,7 +42,7 @@ namespace PROJECT_NAME{
     Tree* bin(Reader<Buf>* self,Ctx& ctx,int depth){
         using Char=typename Reader<Buf>::char_type;
         if(depth<=0)return unary<Tree>(self,ctx);
-        Tree* ret=bin(self,ctx,depth-1);
+        Tree* ret=bin<Tree>(self,ctx,depth-1);
         if(!ret)return nullptr;
         const Char* expected=nullptr;
         while(ctx.expect(self,depth,expected)){
@@ -64,7 +64,7 @@ namespace PROJECT_NAME{
 
     template<class Tree,class Buf,class Ctx>
     Tree* expression(Reader<Buf>* self,Ctx& ctx){
-        return bin<Tree>(self,ctx.depthmax);
+        return bin<Tree>(self,ctx,ctx.depthmax);
     }
 
     template<class Buf,class Ctx>
@@ -72,7 +72,7 @@ namespace PROJECT_NAME{
         using Tree=std::remove_pointer_t<remove_cv_ref<decltype(ctx.result)>>;
         if(!begin)return true;
         if(!self)return true;
-        ctx.result=expression(self,ctx);
+        ctx.result=expression<Tree>(self,ctx);
         return false;
     }
 /*

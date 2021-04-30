@@ -12,7 +12,7 @@
 #include<map>
 #include<iostream>
 #include"easyscript/script.h"
-
+#include"hardscript/hardtest.h"
 #include<Windows.h>
 
 using namespace PROJECT_NAME;
@@ -87,5 +87,6 @@ int main(int argc,char** argv){
     execute(script,1);
     std::cout << get_result(script)<< "\n";
     delete_script(script);
+    hardtest();
     return 0;
 }

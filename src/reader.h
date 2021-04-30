@@ -157,6 +157,7 @@ namespace PROJECT_NAME{
             auto size=ahead(str,not_expect,cmp);
             if(size==0)return false;
             pos+=size;
+            ignore();
             return true;
         }
 
@@ -176,7 +177,7 @@ namespace PROJECT_NAME{
 
         bool seek(size_t pos,bool strict=false){
             if(buf.size()<=pos){
-                if(strict)return true;
+                if(strict)return false;
                 pos=buf.size();
             }
             this->pos=pos;

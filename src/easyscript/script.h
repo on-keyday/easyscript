@@ -13,7 +13,9 @@
 #else
 #define STDCALL
 #endif
+#ifdef __cplusplus
 extern"C"{
+#endif
     typedef struct Script Script;
 
     typedef struct ArgContext ArgContext;
@@ -53,4 +55,6 @@ extern"C"{
     DLL_EXPORT int STDCALL set_result_none(ArgContext* arg);
 
     DLL_EXPORT size_t STDCALL get_instance_id(ArgContext* arg);
+#ifdef __cplusplus
 }
+#endif

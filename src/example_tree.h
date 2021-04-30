@@ -34,11 +34,29 @@ namespace PROJECT_NAME{
             return self->expect(first,expected)||op_expect(self,expected,other...);
         }
 
-        int depthmax=7;
+        int depthmax=8;
+
+        bool mustexpect=false;
+
+        bool syntaxerr=false;
     
-        bool expect(Reader<Buf>* self,int depth,const char* expected){
+        bool expect(Reader<Buf>* self,int depth,const char*& expected){
             auto check=[&](auto... args){return op_expect(self,expected,args...);};
             switch (depth){
+            case 8:
+                if(mustexpect){
+                    if(check(":")){
+                        mustexpect=false;
+                        return true;
+                    }
+                    syntaxerr=true;
+                    return false;
+                }
+                else if(check("?")){
+                    mustexpect=true;
+                    return true;
+                }
+                return false;
             case 7:
                 return check("=");
             case 6:
@@ -72,7 +90,7 @@ namespace PROJECT_NAME{
             }
             else if(self->ahead("\"")||self->ahead("'")){
                 Buf str;
-                if(!reader.string(str))return nullptr;
+                if(!self->string(str))return nullptr;
                 ret=make_tree(str,nullptr,nullptr,Kind::string);
                 if(!ret)return nullptr;
             }
@@ -89,18 +107,29 @@ namespace PROJECT_NAME{
                 }
                 if(!ret)return nullptr;
             }
-            else if(reader.expect("new",is_c_id_usable)){
-                auto tmp=expression(self,*this);
+            else if(self->expect("new",is_c_id_usable)){
+                if(!is_c_id_top_usable(self->achar()))
+                    return nullptr;
+                Buf id;
+                self->readwhile(id,untilincondition,is_c_id_usable<char>);
+                if(id.size()==0)return nullptr;
+                auto tmp=make_tree(id);
                 if(!tmp)return nullptr;
-                ret=make<Tree>("new",nullptr,tmp,EvalType::create);
-                if(!ret){
+                if(!self->expect("(")){
                     delete tmp;
                     return nullptr;
                 }
+                auto obj=parse_arg(tmp,self);
+                if(!obj)return nullptr;
+                ret=make_tree("new",nullptr,obj,Kind::create);
+                if(!ret){
+                    delete obj;
+                    return nullptr;
+                }
             }  
-            else if(is_c_id_top_usable(reader.achar())){
+            else if(is_c_id_top_usable(self->achar())){
                 Buf id;
-                reader.readwhile(id,untilincondition,is_c_id_usable<char>);
+                self->readwhile(id,untilincondition,is_c_id_usable<char>);
                 if(id.size()==0)return nullptr;
                 if(id=="true"||id=="false"){
                     ret=make_tree(id,nullptr,nullptr,Kind::boolean);
@@ -117,7 +146,7 @@ namespace PROJECT_NAME{
             const char* expected=nullptr;
             while(true){
                 if(self->expect("(")){
-                    auto hold=make_tree("()",nullptr,ret);
+                    /*auto hold=make_tree("()",nullptr,ret);
                     if(!hold){
                         delete ret;
                         return nullptr;
@@ -132,7 +161,8 @@ namespace PROJECT_NAME{
                             return nullptr;
                         }
                         ret->arg.push_back(tmp);
-                    }
+                    }*/
+                    if(!(ret=parse_arg(ret,self)))return nullptr;
                     continue;
                 }
                 else if(self->expect("[")){
@@ -151,38 +181,61 @@ namespace PROJECT_NAME{
                     ret->left=tmp;
                     continue;
                 }
-                else if(reader.expect(".")){
-                    if(!is_c_id_top_usable(reader.achar())){
+                else if(self->expect(".")){
+                    if(!is_c_id_top_usable(self->achar())){
                         delete ret;
-                        return false;
+                        return nullptr;
                     }
                     Buf id;
-                    reader.readwhile(id,untilincondition,is_c_id_usable<char>);
-                    if(id.size()==0)return false;
+                    self->readwhile(id,untilincondition,is_c_id_usable<char>);
+                    if(id.size()==0){
+                        delete ret;
+                        return nullptr;
+                    }
                     auto tmp1=make_tree(id,nullptr,nullptr);
                     if(!tmp1){
                         delete ret;
-                        return false;
+                        return nullptr;
                     }
                     auto tmp2=make_tree(".",ret,tmp1);
                     if(!tmp2){
                         delete ret;
                         delete tmp1;
-                        return false;
+                        return nullptr;
                     }
                     ret=tmp2;
                     continue;
                 }
-                else if(reader.expect("++",expected)||reader.expect("--",expected)){
+                else if(self->expect("++",expected)||self->expect("--",expected)){
                     auto tmp=make_tree(expected,nullptr,ret);
                     if(!tmp){
                         delete ret;
-                        return false;
+                        return nullptr;
                     }
                     ret=tmp;
                     continue;
                 }
                 break;
+            }
+            return ret;
+        }
+
+        Tree* parse_arg(Tree* ret,Reader<Buf>* self){
+            auto hold=make_tree("()",nullptr,ret);
+            if(!hold){
+                delete ret;
+                return nullptr;
+            }
+            ret=hold;
+            while(true){
+                if(self->expect(")"))break;
+                auto tmp=expression<Tree>(self,*this);
+                if(!tmp||(!self->expect(",")&&!self->ahead(")"))){
+                    delete tmp;
+                    delete ret;
+                    return nullptr;
+                }
+                ret->arg.push_back(tmp);
             }
             return ret;
         }

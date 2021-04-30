@@ -87,6 +87,7 @@ std::string control::parse_type(PROJECT_NAME::Reader<std::string>& reader,bool s
         }
         bool first=true;
         name+="(";
+        size_t num=0;
         for(auto& s:types){
             if(first){
                 first=false;
@@ -95,7 +96,8 @@ std::string control::parse_type(PROJECT_NAME::Reader<std::string>& reader,bool s
                 name+=",";
             }
             if(s==""){
-                name+="@";
+                name+="@"+std::to_string(num);
+                num++;
             }
             else{
                 name+=s;

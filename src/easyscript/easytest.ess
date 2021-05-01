@@ -13,7 +13,7 @@ func hook2(msg){
 
 func hook(msg){
 	console.println("User32>"+msg);
-	user32.MessageBoxA(0,msg,"User32",0)
+	user32.MessageBoxA(0,msg,"User32",0);
 }
 
 user32=new User32();

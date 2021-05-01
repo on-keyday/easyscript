@@ -22,6 +22,9 @@
 #include <sys/socket.h>
 #include <netdb.h>
 #define closesocket close
+#define ioctlsocket ioctrl
+#define SD_SEND SHUT_WR
+#define SD_RECEIVE SHUT_RD
 #endif
 #define USE_SSL 0
 #if USE_SSL

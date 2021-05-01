@@ -16,6 +16,8 @@
 #include<WinSock2.h>
 #include<WS2tcpip.h>
 #elif __linux__
+#include<unistd.h>
+#include<sys/stat.h>
 #include <sys/types.h>
 #include <sys/socket.h>
 #include <netdb.h>

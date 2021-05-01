@@ -5,13 +5,14 @@
 */
 
 #pragma once
+#ifdef _WIN32
 #ifndef DLL_EXPORT 
 #define DLL_EXPORT __declspec(dllimport)
 #endif
-#ifdef _WIN32
 #define STDCALL __stdcall
 #else
 #define STDCALL
+#define DLL_EXPORT
 #endif
 #ifdef __cplusplus
 extern"C"{

@@ -40,6 +40,7 @@ jobs:
     steps:
     - name: Checkout repository
       uses: actions/checkout@v2
+#      uses: ilammy/msvc-dev-cmd@v1
 
     # Initializes the CodeQL tools for scanning.
     - name: Initialize CodeQL
@@ -62,13 +63,11 @@ jobs:
     # ✏️ If the Autobuild fails above, remove it and uncomment the following three lines
     #    and modify them (or add more) to build your code if your project
     #    uses a compiled language
-
-      uses: ilammy/msvc-dev-cmd@v1
       run: |
           pwsh -Command Invoke-WebRequest -Uri https://github.com/ninja-build/ninja/releases/download/v1.10.2/ninja-win.zip -OutFile ninja.zip
           pwsh -Command Expand-Archive ninja.zip
           set
-          dir
+          dir %VS140COMNTOOLS%\..
           set PATH=%PATH%;..\ninja
           configure
           build

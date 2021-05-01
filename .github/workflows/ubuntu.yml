@@ -64,7 +64,7 @@ jobs:
     #    uses a compiled language
 
       run: |
-       apt-get install ninja-build -y
+       sudo apt-get install ninja-build -y
        . configure
        . build
 

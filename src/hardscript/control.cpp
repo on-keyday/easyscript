@@ -15,7 +15,7 @@ Control* control::control_parse(Reader<std::string>& reader){
             delete tree;
             return nullptr;
         }
-        if(!parse_inblock(reader,ret->inblock)){
+        if(!parse_inblock(reader,ret->inblock,ret->inblockpos)){
             delete ret;
             return nullptr;
         }
@@ -36,7 +36,24 @@ Control* control::control_parse(Reader<std::string>& reader){
         if(!ret)return nullptr;
     }
     else if(reader.expect("func",is_c_id_usable)){
-
+        if(!is_c_id_top_usable(reader.achar()))return nullptr;
+        std::string name;
+        reader.readwhile(name,untilincondition,is_c_id_usable<char>);
+        if(name=="")return nullptr;
+        std::vector<std::string> arg,argtype;
+        std::string rettype;
+        if(!parse_function(reader,arg,argtype,rettype)){
+            return nullptr;
+        }
+        ret=make<Control>(name,nullptr,CtrlKind::func);
+        if(!ret)return nullptr;
+        ret->arg=std::move(arg);
+        ret->argtype=std::move(argtype);
+        ret->type=std::move(rettype);
+        if(!parse_inblock(reader,ret->inblock,ret->inblockpos)){
+            delete ret;
+            return nullptr;
+        }
     }
     else if(reader.expect("var",is_c_id_usable)){
         
@@ -47,7 +64,7 @@ Control* control::control_parse(Reader<std::string>& reader){
             delete tree;
             return nullptr;
         }
-        ret=make<Control>("",tree);
+        ret=make<Control>("",tree,CtrlKind::expr);
         if(!ret){
             delete tree;
             return nullptr;
@@ -56,7 +73,8 @@ Control* control::control_parse(Reader<std::string>& reader){
     return ret;
 }
 
-bool control::parse_inblock(PROJECT_NAME::Reader<std::string>& reader,std::string& buf){
+bool control::parse_inblock(PROJECT_NAME::Reader<std::string>& reader,std::string& buf,size_t& pos){
+    pos=reader.readpos();
     return reader.readwhile(buf,depthblock_withbuf,BasicBlock<std::string>(true,false,false));
 }
 
@@ -82,7 +100,8 @@ std::string control::parse_type(PROJECT_NAME::Reader<std::string>& reader,bool s
     }
     else if(reader.expect("(")){
         std::vector<std::string> _,types;
-        if(!parse_function(reader,_,types,strict)){
+        std::string ret;
+        if(!parse_function(reader,_,types,ret,strict)){
             return "";
         }
         bool first=true;
@@ -104,10 +123,8 @@ std::string control::parse_type(PROJECT_NAME::Reader<std::string>& reader,bool s
             }
         }
         name+=")";
-        if(reader.expect("->")){
-            auto tmp=parse_type(reader,strict);
-            if(tmp=="")return "";
-            name+="->"+tmp;
+        if(ret!=""){
+            name+="->"+ret;
         }
         return name;
     }
@@ -125,7 +142,7 @@ std::string control::parse_type(PROJECT_NAME::Reader<std::string>& reader,bool s
     return "";
 }
 
-bool control::parse_function(PROJECT_NAME::Reader<std::string>& reader,std::vector<std::string>& arg,std::vector<std::string>& type,bool strict){
+bool control::parse_function(PROJECT_NAME::Reader<std::string>& reader,std::vector<std::string>& arg,std::vector<std::string>& type,std::string& ret,bool strict){
     while(!reader.expect(")")){
         std::string argname;
         std::string typenames;
@@ -169,6 +186,10 @@ bool control::parse_function(PROJECT_NAME::Reader<std::string>& reader,std::vect
         if(!reader.expect(",")&&!reader.ahead(")")){
             return false;
         }
+    }
+    if(reader.expect("->")){
+        ret=parse_type(reader,strict);
+        if(ret=="")return false;
     }
     return true;
 }

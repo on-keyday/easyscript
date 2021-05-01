@@ -59,14 +59,25 @@ namespace control{
         }
     }
 
+
+    enum class CtrlKind{
+        ctrl,
+        func,
+        expr
+    };
+
     struct Control{
         //CtrlKind kind=CtrlKind::unknown;
+        CtrlKind kind=CtrlKind::ctrl;
         Tree* expr=nullptr;
         std::string name;
         std::string inblock;
         std::string type;
-        Control(const std::string name="",Tree* expr=nullptr):
-        name(name)/*,kind(kind)*/,expr(expr){}
+        std::vector<std::string> arg;
+        std::vector<std::string> argtype;
+        size_t inblockpos=0;
+        Control(const std::string name="",Tree* expr=nullptr,CtrlKind kind=CtrlKind::ctrl):
+        name(name),kind(kind),expr(expr){}
         ~Control(){
             delete expr;
         }
@@ -74,9 +85,9 @@ namespace control{
 
     Control* control_parse(PROJECT_NAME::Reader<std::string>& reader);
 
-    bool parse_inblock(PROJECT_NAME::Reader<std::string>& reader,std::string& buf);
+    bool parse_inblock(PROJECT_NAME::Reader<std::string>& reader,std::string& buf,size_t& pos);
 
     std::string parse_type(PROJECT_NAME::Reader<std::string>& reader,bool strict=false);
 
-    bool parse_function(PROJECT_NAME::Reader<std::string>& reader,std::vector<std::string>& arg,std::vector<std::string>& type,bool strict=false);
+    bool parse_function(PROJECT_NAME::Reader<std::string>& reader,std::vector<std::string>& arg,std::vector<std::string>& type,std::string& ret,bool strict=false);
 }

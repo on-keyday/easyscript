@@ -63,8 +63,13 @@ int STDCALL execute(Script* self,unsigned char flag){
     self->reader.set_ignore(ignore_c_comments);
     auto beginpos=self->reader.readpos();
     auto res=interpreter::interpret(self->reader,&self->result,self->base);
-    if(res!=0&&flag&0x01){
-        self->reader.seek(beginpos);
+    if(res!=0){
+        LinePosContext ctx;
+        self->reader.readwhile(linepos,ctx);
+        self->result.first+="("+std::to_string(ctx.line+1)+","+std::to_string(ctx.pos+1)+")";
+        if(flag&0x01){
+            self->reader.seek(beginpos);
+        }
     }
     return res;
 }

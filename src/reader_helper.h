@@ -116,6 +116,14 @@ namespace PROJECT_NAME{
         HTTPBodyContext(Header& head,Recver& recver):recv(recver),header(head){}
         bool succeed=false;
     };
+
+    struct LinePosContext{
+        size_t line=0;
+        size_t pos=0;
+        size_t nowpos=0;
+        bool crlf=false;
+        bool cr=false;
+    };
     
     template<class Char,class Buf,class Self>
     void increment(Char& n,Buf& ret,Self& self){
@@ -466,6 +474,42 @@ namespace PROJECT_NAME{
         if(!self)return true;
         if(judge(self->achar())){
             ret.push_back(self->achar());
+        }
+        return false;
+    }
+
+    template<class Buf,class Ctx>
+    bool linepos(Reader<Buf>* self,Ctx& ctx,bool begin){
+        if(!self)return true;
+        if(begin){
+            ctx.nowpos=self->readpos();
+            ctx.line=0;
+            ctx.pos=0;
+            self->seek(0);
+            return true;
+        }
+        if(self->readpos()>=ctx.nowpos){
+            self->seek(ctx.nowpos);
+            return true;
+        }
+        ctx.pos++;
+        if(ctx.crlf){
+            while(self->expect("\r\n")){
+                ctx.line++;
+                ctx.pos=0;
+            }
+        }
+        else if(ctx.cr){
+            while(self->expect("\r")){
+                ctx.line++;
+                ctx.pos=0;
+            }
+        }
+        else{
+            while(self->expect("\n")){
+                ctx.line++;
+                ctx.pos=0;
+            }
         }
         return false;
     }

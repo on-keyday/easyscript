@@ -398,7 +398,7 @@ bool HTTPClient::method_if_exist(const char* method,const char* url,const char* 
     if(check("GET")){
         return get(url);
     }
-    else if("HEAD"){
+    else if(check("HEAD")){
         return head(url);
     }
     else if(check("POST")){

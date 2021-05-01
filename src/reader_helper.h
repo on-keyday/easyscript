@@ -8,6 +8,7 @@
 #include"reader.h"
 #include<cstring>
 #include<algorithm>
+#include<string>
 namespace PROJECT_NAME{
 
     template<class Char>

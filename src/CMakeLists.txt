@@ -1,5 +1,7 @@
+if(WIN32)
 include_directories("D:\\OpenSSL\\build-x64-debug\\include")
 link_directories("D:\\OpenSSL\\build-x64-debug\\lib")
+endif()
 add_executable(program "main.cpp" "reader.h" "reader_helper.h" "socket.h" "socket.cpp")
 file(GLOB INPUT_H "easyscript/*.h")
 file(GLOB INPUT_CPP "easyscript/*.cpp")

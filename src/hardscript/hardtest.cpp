@@ -12,9 +12,10 @@ using namespace PROJECT_NAME;
 using namespace control;
 
 int STDCALL hardtest(){
-    Reader<std::string> test("1?true:0?\ntrue:\nfalse",ignore_c_comments);
-    auto i=expr_parse(test);
-    delete i;
+    auto code="for i:=0;i<10;i++{break;} var(f &*(socket int,buf []byte,host string)->int real,imag float = sqrt(-1))";
+    Reader<std::string> test(code,ignore_c_comments);
+    std::vector<Control> vec;
+    control_parse(test,vec);
     LinePosContext ctx;
     test.readwhile(linepos,ctx);
     return 0;

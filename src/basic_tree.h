@@ -75,7 +75,7 @@ namespace PROJECT_NAME{
     }
 
     template<class Buf,class Ctx>
-    bool parse_expr(Reader<Buf>* self,Ctx& ctx,bool begin){
+    bool read_expr(Reader<Buf>* self,Ctx& ctx,bool begin){
         using Tree=std::remove_pointer_t<remove_cv_ref<decltype(ctx.result)>>;
         if(!begin)return true;
         if(!self)return true;

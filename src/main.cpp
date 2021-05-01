@@ -83,7 +83,7 @@ int main(int argc,char** argv){
     sizeof(HTTPClient);*/
     auto script=make_script();
     if(!script)return -1;
-    add_sourece_from_file(script,"D:\\CommonLib\\CommonLib2\\src\\easyscript\\easytest.ess");
+    //add_sourece_from_file(script,"D:\\CommonLib\\CommonLib2\\src\\easyscript\\easytest.ess");
 #ifdef _WIN32
     add_builtin_object(script,"User32",User32Proxy,&argc);
     add_builtin_object(script,"Wait",WaitProxy,&argc);

@@ -37,7 +37,7 @@ namespace control{
     template<class Buf>
     Tree* expr_parse(PROJECT_NAME::Reader<Buf>& reader){
         PROJECT_NAME::ExampleTree<Tree,TreeKind,Buf> ctx;
-        reader.readwhile(PROJECT_NAME::parse_expr,ctx);
+        reader.readwhile(PROJECT_NAME::read_expr,ctx);
         if(!ctx.result||ctx.syntaxerr){
             delete ctx.result;
             return nullptr;
@@ -69,10 +69,29 @@ namespace control{
     enum class CtrlKind{
         ctrl,
         func,
+        var,
         expr
     };
 
     struct Control{
+    private:
+        bool moving(Control& from){
+            if(expr!=from.expr){
+                delete expr;
+            }
+            expr=from.expr;
+            from.expr=nullptr;
+            kind=from.kind;
+            name=std::move(from.name);
+            inblock=std::move(from.inblock);
+            type=std::move(from.type);
+            arg=std::move(from.arg);
+            argtype=std::move(from.argtype);
+            inblockpos=from.inblockpos;
+            from.inblockpos=0;
+            return true;
+        }
+    public:
         //CtrlKind kind=CtrlKind::unknown;
         CtrlKind kind=CtrlKind::ctrl;
         Tree* expr=nullptr;
@@ -84,16 +103,39 @@ namespace control{
         size_t inblockpos=0;
         Control(const std::string name="",Tree* expr=nullptr,CtrlKind kind=CtrlKind::ctrl):
         name(name),kind(kind),expr(expr){}
+        Control(const Control&)=delete;
+        Control(Control&& from) noexcept{
+            moving(from);
+        }
+
+        Control& operator=(Control&& from){
+            moving(from);
+        }
         ~Control(){
             delete expr;
         }
     };
 
-    Control* control_parse(PROJECT_NAME::Reader<std::string>& reader);
+
+    bool check_initexpr(PROJECT_NAME::Reader<std::string>& reader);
+
+    bool control_parse(PROJECT_NAME::Reader<std::string>& reader,std::vector<Control>& vec);
 
     bool parse_inblock(PROJECT_NAME::Reader<std::string>& reader,std::string& buf,size_t& pos);
 
+    bool parse_expr(PROJECT_NAME::Reader<std::string>& reader,std::vector<Control>& vec,bool semicolon);
+
     std::string parse_type(PROJECT_NAME::Reader<std::string>& reader,bool strict=false);
 
-    bool parse_function(PROJECT_NAME::Reader<std::string>& reader,std::vector<std::string>& arg,std::vector<std::string>& type,std::string& ret,bool strict=false);
+    bool parse_funcarg(PROJECT_NAME::Reader<std::string>& reader,std::vector<std::string>& arg,std::vector<std::string>& type,std::string& ret,bool strict=false);
+
+    bool parse_var(PROJECT_NAME::Reader<std::string>& reader,std::vector<Control>& vec);
+
+    bool parse_var_detail(PROJECT_NAME::Reader<std::string>& reader,std::vector<Control>& vec,bool bracket,bool initeq);
+
+    bool parse_if(PROJECT_NAME::Reader<std::string>& reader,std::vector<Control>& vec);
+
+    bool parse_func(PROJECT_NAME::Reader<std::string>& reader,std::vector<Control>& vec);
+
+    bool parse_for(PROJECT_NAME::Reader<std::string>& reader,std::vector<Control>& vec);
 }

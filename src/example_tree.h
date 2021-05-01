@@ -77,7 +77,7 @@ namespace PROJECT_NAME{
             case 2:
                 return check("+","-");
             case 1:
-                return check("*","/","%");
+                return check("*","/","%","<<",">>");
             case 0:
                 return check("++","--","+","-","!");
             default:

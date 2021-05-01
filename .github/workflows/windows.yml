@@ -69,7 +69,6 @@ jobs:
           set PATH=%PATH%;..\ninja
           configure
           build
-          dir clang_build
       shell: cmd
 
     - name: Perform CodeQL Analysis

@@ -749,7 +749,7 @@ namespace PROJECT_NAME{
                 if(bit==0xff)
                     break;
                 no_ignore++;
-                shift+=(bit<<6*(3-i));
+                shift+=((bit<<6)*(3-i));
             }
             shift=translate_byte_net_and_host<int>(shift_p);
             shift>>=8;
@@ -835,7 +835,7 @@ namespace PROJECT_NAME{
                 ctx->failed=true;
                 return true;
             }
-            ret.push_back(first<<4+second);
+            ret.push_back((first<<4)+second);
         }
         else{
             ret.push_back(self->achar());

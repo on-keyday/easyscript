@@ -1,3 +1,6 @@
+#    Copyright (c) 2021 on-keyday
+#    Released under the MIT license
+#    https://opensource.org/licenses/mit-license.php
 if(WIN32)
 include_directories("D:\\OpenSSL\\build-x64-debug\\include")
 link_directories("D:\\OpenSSL\\build-x64-debug\\lib")

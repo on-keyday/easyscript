@@ -39,7 +39,7 @@ namespace PROJECT_NAME{
         bool mustexpect=false;
 
         bool syntaxerr=false;
-    
+
         bool expect(Reader<Buf>* self,int depth,const char*& expected){
             auto check=[&](auto... args){return op_expect(self,expected,args...);};
             switch (depth){

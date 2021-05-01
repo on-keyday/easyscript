@@ -13,11 +13,12 @@
 #include<iostream>
 #include"easyscript/script.h"
 #include"hardscript/hardtest.h"
-#include<Windows.h>
 
 using namespace PROJECT_NAME;
 using strreader=Reader<std::string>;
 
+#ifdef _WIN32
+#include<Windows.h>
 struct DLL{
     void* handle=nullptr;
 };
@@ -43,7 +44,7 @@ int User32Proxy(void* ctx,const char* membname,ArgContext* arg){
     }
     return 0;
 }
-
+#endif
 int ConsoleProxy(void* ctx,const char* membname,ArgContext* arg){
     std::string name=membname;
     if(name=="println"){
@@ -60,9 +61,11 @@ int WaitProxy(void* ctx,const char* membname,ArgContext* arg){
     if(name=="pause"){
         ::system("pause");
     }
+#ifdef _WIN32
     else if(name=="sleep"){
         Sleep(1000);
     }
+#endif
     return 0;
 }
 
@@ -81,9 +84,11 @@ int main(int argc,char** argv){
     auto script=make_script();
     if(!script)return -1;
     add_sourece_from_file(script,"D:\\CommonLib\\CommonLib2\\src\\easyscript\\easytest.ess");
+#ifdef _WIN32
     add_builtin_object(script,"User32",User32Proxy,&argc);
-    add_builtin_object(script,"Console",ConsoleProxy,&argc);
     add_builtin_object(script,"Wait",WaitProxy,&argc);
+#endif
+    add_builtin_object(script,"Console",ConsoleProxy,&argc);
     execute(script,1);
     std::cout << get_result(script)<< "\n";
     delete_script(script);

@@ -4,4 +4,7 @@ add_executable(program "main.cpp" "reader.h" "reader_helper.h" "socket.h" "socke
 file(GLOB INPUT_H "easyscript/*.h")
 file(GLOB INPUT_CPP "easyscript/*.cpp")
 add_library(easyscript SHARED ${INPUT_CPP} ${INPUT_H} "hardscript/hardtest.cpp")
-target_link_libraries(program ws2_32 libcrypto libssl easyscript)
+target_link_libraries(program easyscript)
+if(WIN32)
+target_link_libraries(program ws2_32 libcrypto libssl)
+endif()

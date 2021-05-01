@@ -22,7 +22,7 @@ on:
 
 jobs:
   analyze:
-    name: Analyze(windows)
+    name: Analyze(Windows)
     runs-on: windows-latest
     permissions:
       actions: read
@@ -66,10 +66,10 @@ jobs:
       run: |
           pwsh -Command Invoke-WebRequest -Uri https://github.com/ninja-build/ninja/releases/download/v1.10.2/ninja-win.zip -OutFile ninja.zip
           pwsh -Command Expand-Archive ninja.zip
-          cd
-          tree
-     #     configure
-     #     build
+          dir
+          set PATH=%PATH%;..\ninja
+          configure
+          build
       shell: cmd
 
     - name: Perform CodeQL Analysis

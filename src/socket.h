@@ -17,12 +17,13 @@
 #include<WS2tcpip.h>
 #elif __linux__
 #include<unistd.h>
+#include<sys/ioctl.h>
 #include<sys/stat.h>
 #include <sys/types.h>
 #include <sys/socket.h>
 #include <netdb.h>
 #define closesocket close
-#define ioctlsocket ioctrl
+#define ioctlsocket ioctl
 #define SD_SEND SHUT_WR
 #define SD_RECEIVE SHUT_RD
 #endif

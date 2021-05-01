@@ -54,7 +54,7 @@ bool ClientSocket::disconeect(){
     if(!isconnected())return false;
     shutdown(sock,SD_SEND);
     shutdown(sock,SD_RECEIVE);
-    closesocket(sock);
+    ::closesocket(sock);
     sock=invalid;
     return true;
 }

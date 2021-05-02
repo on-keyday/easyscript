@@ -116,6 +116,7 @@ namespace control{
         }
     };
 
+    bool parse_all(PROJECT_NAME::Reader<std::string>& reader,std::vector<Control>& vec);
 
     bool check_initexpr(PROJECT_NAME::Reader<std::string>& reader);
 

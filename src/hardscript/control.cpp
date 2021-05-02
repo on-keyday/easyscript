@@ -9,6 +9,13 @@
 using namespace PROJECT_NAME;
 using namespace control;
 
+bool control::parse_all(PROJECT_NAME::Reader<std::string>& reader,std::vector<Control>& vec){
+    while(!reader.eof()){
+        if(!control_parse(reader,vec))return false;
+    }
+    return true;
+}
+
 bool control::check_initexpr(PROJECT_NAME::Reader<std::string>& reader){
     if(is_c_id_top_usable(reader.achar())){
         auto beginpos=reader.readpos();
@@ -34,10 +41,10 @@ bool control::control_parse(Reader<std::string>& reader,std::vector<Control>& ve
         return parse_for(reader,vec);
     }
     else if(reader.expect("switch",is_c_id_usable)){
-
+        return false;
     }
     else if(reader.expect("select",is_c_id_usable)){
-
+        return false;
     }
     else if(reader.expect("continue",expected,is_c_id_usable)||
             reader.expect("break",expected,is_c_id_usable)){

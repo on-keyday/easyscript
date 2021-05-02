@@ -12,10 +12,24 @@ using namespace PROJECT_NAME;
 using namespace control;
 
 int STDCALL hardtest(){
-    auto code="for i:=0;i<10;i++{break;} var(reader (socket int,buf []byte,host string)->int real,imag float = sqrt(-1))";
+    auto code=
+R"(
+    var call ([]string)->int = null;
+    func main(argv []string)->int{
+        if argv.len() < 1 {
+            return 0;
+        }
+        printf(argv[0]);
+        return 0;
+    }
+
+    call=main;
+
+    call();
+)";
     Reader<std::string> test(code,ignore_c_comments);
-    std::vector<Control> vec;
-    auto t=parse_all(test,vec);
+    std::vector<Control> globalvec;
+    auto t=parse_all(test,globalvec);
     LinePosContext ctx;
     test.readwhile(linepos,ctx);
     return 0;

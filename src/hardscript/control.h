@@ -130,6 +130,8 @@ namespace control{
 
     bool parse_funcarg(PROJECT_NAME::Reader<std::string>& reader,std::vector<std::string>& arg,std::vector<std::string>& type,std::string& ret,bool strict=false);
 
+    std::string typevec_to_type(std::vector<std::string>& type,std::string& ret);
+
     bool parse_var(PROJECT_NAME::Reader<std::string>& reader,std::vector<Control>& vec);
 
     bool parse_var_detail(PROJECT_NAME::Reader<std::string>& reader,std::vector<Control>& vec,bool bracket,bool initeq);

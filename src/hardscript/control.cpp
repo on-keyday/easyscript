@@ -59,6 +59,15 @@ bool control::control_parse(Reader<std::string>& reader,std::vector<Control>& ve
     else if(reader.expect("var",is_c_id_usable)){
         return parse_var(reader,vec);
     }
+    else if(reader.expect("return",is_c_id_usable)){
+        Control ret;
+        ret.name="return";
+        if(!reader.ahead(";")){
+            if(!(ret.expr=expr_parse(reader)));
+        }
+        if(!reader.expect(";"))return false;
+        vec.push_back(std::move(ret));
+    }
     else if(check_initexpr(reader)){
          return parse_var_detail(reader,vec,false,true)&&reader.expect(";");
     }
@@ -70,7 +79,7 @@ bool control::control_parse(Reader<std::string>& reader,std::vector<Control>& ve
 
 bool control::parse_inblock(PROJECT_NAME::Reader<std::string>& reader,std::string& buf,size_t& pos){
     pos=reader.readpos();
-    return reader.readwhile(buf,depthblock_withbuf,BasicBlock<std::string>(true,false,false));
+    return reader.readwhile(buf,depthblock_withbuf,BasicBlock<std::string>(true,false,false),true);
 }
 
 bool control::parse_expr(PROJECT_NAME::Reader<std::string>& reader,std::vector<Control>& vec,bool semicolon){
@@ -113,29 +122,7 @@ std::string control::parse_type(PROJECT_NAME::Reader<std::string>& reader,bool s
         if(!parse_funcarg(reader,_,types,ret,strict)){
             return "";
         }
-        bool first=true;
-        name+="(";
-        size_t num=0;
-        for(auto& s:types){
-            if(first){
-                first=false;
-            }
-            else{
-                name+=",";
-            }
-            if(s==""){
-                name+="@"+std::to_string(num);
-                num++;
-            }
-            else{
-                name+=s;
-            }
-        }
-        name+=")";
-        if(ret!=""){
-            name+="->"+ret;
-        }
-        return name;
+        return typevec_to_type(types,ret);
     }
     else if(is_c_id_top_usable(reader.achar())){
         reader.readwhile(name,untilincondition,is_c_id_usable<char>);
@@ -201,6 +188,32 @@ bool control::parse_funcarg(PROJECT_NAME::Reader<std::string>& reader,std::vecto
         if(ret=="")return false;
     }
     return true;
+}
+
+std::string control::typevec_to_type(std::vector<std::string>& types,std::string& ret){
+    bool first=true;
+    std::string name="(";
+    size_t num=0;
+    for(auto& s:types){
+        if(first){
+            first=false;
+        }
+        else{
+            name+=",";
+        }
+        if(s==""){
+            name+="@"+std::to_string(num);
+            num++;
+        }
+        else{
+            name+=s;
+        }
+    }
+    name+=")";
+    if(ret!=""){
+        name+="->"+ret;
+    }
+    return name;
 }
 
 bool control::parse_var(PROJECT_NAME::Reader<std::string>& reader,std::vector<Control>& vec){
@@ -307,7 +320,7 @@ bool control::parse_func(PROJECT_NAME::Reader<std::string>& reader,std::vector<C
     if(ret.name=="")return false;
     std::vector<std::string> arg,argtype;
     std::string rettype;
-    if(!parse_funcarg(reader,arg,argtype,rettype))return false;
+    if(!reader.expect("(")||!parse_funcarg(reader,arg,argtype,rettype))return false;
     ret.arg=std::move(arg);
     ret.argtype=std::move(argtype);
     ret.type=std::move(rettype);

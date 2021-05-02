@@ -870,6 +870,7 @@ namespace PROJECT_NAME{
                 sum+=size;
                 ret.resize(sum);
                 memmove(&ret.data()[prevsum],&self->ref().data()[self->readpos()],size);
+                self->seek(self->readpos()+size);
                 if(!self->expect("\r\n"))return false;
             }
             ctx->succeed=true;

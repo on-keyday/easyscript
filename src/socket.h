@@ -182,8 +182,8 @@ namespace PROJECT_NAME{
         const std::string& raw(){return _raw;}
         const std::string& body(){return _body;}
         long long time(){return _time;}
-        bool set_cacert(const std::string&& file){return sock.set_cacert(file);}
-        bool set_default_path(const std::string&& path){default_path=path;return true;}
+        bool set_cacert(const std::string& file){return sock.set_cacert(file);}
+        bool set_default_path(const std::string& path){default_path=path;return true;}
         bool set_encoded(bool val){encoded=val;return true;}
         bool set_auto_redirect(bool val){auto_redirect=val;return true;}
         bool get(const char* url){return method("GET",url);}
@@ -193,7 +193,7 @@ namespace PROJECT_NAME{
         bool patch(const char* url,const char* body,size_t size){if(!body||!size)return false; return method("PATCH",url,body,size);}
         bool options(const char* url){return method("OPTIONS",url);}
         bool trace(const char* url,const char* body=nullptr,size_t size=0){return method("TRACE",url,body,size);}
-        bool _delete(const char* url){return method("DELETE",url);}
+        bool _delete(const char* url,const char* body=nullptr,size_t size=0){return method("DELETE",url,body,size);}
         unsigned short statuscode(){return resinfo.statuscode;}
         const std::string& reasonphrase(){return resinfo.reason;}
         int version(){return resinfo.version;}

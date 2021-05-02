@@ -10,10 +10,11 @@ bool compiler::to_bytecode(std::vector<control::Control>& ctrlvec,size_t& pos,Id
             return genifcode(ctrlvec,pos,table,out);
         }
     }
+    return false;
 }
 
 bool compiler::genifcode(std::vector<control::Control>& ctrlvec,size_t& pos,IdTable& table,std::string& out){
-    
+    return false;
 }
 
 bool compiler::genbytree(Tree* tree,IdTable& table,std::string& out){
@@ -30,4 +31,5 @@ bool compiler::genbytree(Tree* tree,IdTable& table,std::string& out){
     if(tree->symbol=="?"){
 
     }
+    return false;
 }

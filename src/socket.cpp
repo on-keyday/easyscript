@@ -327,6 +327,7 @@ bool HTTPClient::read_body(Reader<std::string>& response,HTTPResponse<HeaderMap,
         }
         response.set_ignore(nullptr);
         response.seek(beginpos);
+        _body="";
         while(!response.ceof()){
             _body.push_back(response.achar());
             response.increment();
@@ -380,6 +381,9 @@ bool HTTPClient::method(const char* method,const char* url,const char* body,size
                 depth--;
                 encoded=tmphold;
             }
+        }
+        else{
+            res=true;
         }
     }
     auto end=std::chrono::system_clock::now();

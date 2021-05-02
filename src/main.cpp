@@ -13,6 +13,7 @@
 #include<iostream>
 #include"easyscript/script.h"
 #include"hardscript/hardtest.h"
+#include"sockinterpreter.h"
 
 using namespace PROJECT_NAME;
 using strreader=Reader<std::string>;
@@ -72,15 +73,9 @@ int WaitProxy(void* ctx,const char* membname,ArgContext* arg){
 int main(int argc,char** argv){
     /*if(argc<=1){
         
-    }
+    }*/
     WSAData data;
     WSAStartup(MAKEWORD(2,2),&data);
-    HTTPClient client;
-    client.set_auto_redirect(true);
-    client.get("http://google.com/");
-    std::cout << client.raw() << "\n" << client.time() << "\n";
-    WSACleanup();
-    sizeof(HTTPClient);*/
     auto script=make_script();
     if(!script)return -1;
     //add_sourece_from_file(script,"D:\\CommonLib\\CommonLib2\\src\\easyscript\\easytest.ess");
@@ -93,5 +88,7 @@ int main(int argc,char** argv){
     std::cout << get_result(script)<< "\n";
     delete_script(script);
     hardtest();
+    interpreter_start();
+    WSACleanup();
     return 0;
 }

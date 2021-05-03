@@ -5,7 +5,9 @@
 */
 
 #include"socket.h"
-#include<chrono>
+#if USE_SSL
+#include<openssl/err.h>
+#endif
 using namespace PROJECT_NAME;
 
 bool ClientSocket::open(const char* hostname,const char* service,int family,int type){
@@ -117,7 +119,7 @@ bool SecureSocket::init(){
 		SSL_CTX_set_alpn_protos(ctx, proto, 9);
 		SSL_CTX_load_verify_locations(ctx, cacert_file.c_str(), NULL);
 		SSL_CTX_set_verify(ctx, SSL_VERIFY_PEER, nullptr);
-		//SSL_CTX_set_info_callback(ctx,infocb);
+		SSL_CTX_set_info_callback(ctx,(void(*)(const SSL*,int,int))infocb);
 	}
     return true;
 #endif
@@ -164,6 +166,7 @@ bool SecureSocket::close(){
 			break;
 		}
         SSL_free(ssl);
+        ssl=nullptr;
     }
     no_shutdown=false;
 #endif
@@ -181,20 +184,38 @@ SecureSocket::~SecureSocket(){
 
 bool HTTPClient::parseurl(std::string url,URLContext<std::string>& ctx,unsigned short& port){
     ctx.needend=true;
-    if(!Reader<std::string>(std::move(url)).readwhile(parse_url,ctx))return false;
-    if(!ctx.succeed)return false;
+    if(!Reader<std::string>(std::move(url)).readwhile(parse_url,ctx)||!ctx.succeed){
+        set_err("syntax of url invalid:"+url);
+        return false;
+    }
     if(ctx.host.length()==0)return false;
     if(ctx.scheme.length()==0){
         ctx.scheme="http";
     }
-    if(ctx.scheme!="http"&&ctx.scheme!="https")return false;
+    if(ctx.scheme!="http"&&ctx.scheme!="https"){
+        set_err("expected scheme is http or https, but "+ctx.scheme);
+        return false;
+    }
     if(ctx.path.length()==0){
         ctx.path=default_path;
     }
     if(ctx.port.length()>0){
-        if(ctx.port.length()>5)return false;
-        auto t=std::stoul(ctx.port);
-        if(t>0xffff)return false;
+        if(ctx.port.length()>5){
+            set_err("too large port number:"+ctx.port);
+            return false;
+        }
+        unsigned long t=0;
+        try{
+            t=std::stoul(ctx.port);
+        }
+        catch(...){
+            set_err("port number:not number:"+ctx.port);
+            return false;
+        }
+        if(t>0xffff){
+            set_err("too large port number:"+ctx.port);
+            return false;
+        }
         port=(unsigned short)t;
     }
     return true;
@@ -225,6 +246,9 @@ bool HTTPClient::make_request(std::string& ret,const char* method,URLContext<std
         ret.append(ctx.port);
     }
     ret.append("\r\n");
+    if(request_adder){
+        if(!request_adder(reqctx,ret,this))return false;
+    }
     if(body&&size){
         ret.append("content-length: ");
         ret.append(std::to_string(size));
@@ -242,7 +266,10 @@ bool HTTPClient::parse_response(Reader<std::string>& response,bool ishead){
     while(true){
         response.readwhile(httpresponse,ctx);
         if(!ctx.succeed){
-            if(ctx.header.synerr)return false;
+            if(ctx.header.synerr){
+                set_err("header syntax error");
+                return false;
+            }
             sock.recv(response.ref());
             response.seek(0);
             continue;
@@ -343,18 +370,38 @@ bool HTTPClient::method_detail(const char* method,const char* url,const char* bo
     if(!parseurl(url,ctx,port))return false;
     if(!encoded)urlencode(ctx);
     std::string request;
-    if(!make_request(request,method,ctx,body,size))return false;
-    if(!sock.open_if_differnet(ctx.host.c_str(),ctx.scheme.c_str()))return false;
+    if(!make_request(request,method,ctx,body,size)){
+        set_err("make request failed.");
+        return false;
+    }
+    if(!sock.open_if_differnet(ctx.host.c_str(),ctx.scheme.c_str())){
+        set_err("host name not resolved:"+ctx.host);
+        return false;
+    }
     if(!sock.connect(port)){
+        set_err("connet error");
+#if USE_SSL
+        std::string got;
+        ERR_print_errors_cb(+[](const char* str,size_t len,void* to){
+            std::string* g=(std::string*)to;
+            g->append(str,len);
+            return 1;
+        },&got);
+        if(got!=""){
+            set_err("connect err:"+got);
+        }
+#endif
         sock.close();
         return false;
     }
     if(!sock.send(request)){
+        set_err("send error");
         sock.close();
         return false;
     }
     Reader<std::string> response;
     if(!sock.recv(response.ref())){
+        set_err("recv error");
         sock.close();
         return false;
     }
@@ -363,6 +410,7 @@ bool HTTPClient::method_detail(const char* method,const char* url,const char* bo
         return false;
     }
     if(!keep_alive)sock.close();
+    set_err("no error");
     return true;
 }
 
@@ -387,8 +435,25 @@ bool HTTPClient::method(const char* method,const char* url,const char* body,size
         }
     }
     auto end=std::chrono::system_clock::now();
-    _time=std::chrono::duration_cast<std::chrono::milliseconds>(end-begin).count();
+    _time=end-begin;
     return res;
+}
+
+bool HTTPClient::set_requestadder(bool(*add)(void*,std::string&,const HTTPClient*),void* ctx){
+    if(!add){
+        request_adder=add;
+        return true;
+    }
+    std::string teststr;
+    add(ctx,teststr,this);
+    if(teststr=="")return false;
+    HTTPHeaderContext<std::multimap<std::string,std::string>,std::string> headertest;
+    Reader<std::string>(teststr).readwhile(httpheader,headertest);
+    if(!headertest.succeed)return false;
+    if(headertest.buf.count("content-length")||headertest.buf.count("host"))return false;
+    request_adder=add;
+    ctx=ctx;
+    return true;
 }
 
 bool HTTPClient::method_if_exist(const char* method,const char* url,const char* body,size_t size){
@@ -423,5 +488,6 @@ bool HTTPClient::method_if_exist(const char* method,const char* url,const char* 
     else if(check("DELETE")){
         return _delete(url);
     }
+    set_err("method "+std::string(method)+" not found");
     return false;
 }

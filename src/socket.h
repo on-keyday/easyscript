@@ -9,6 +9,7 @@
 #include"reader_helper.h"
 #include<string>
 #include<map>
+#include<chrono>
 #ifdef _WIN32
 #ifdef __MINGW32__
 #define _WIN32_WINNT 0x0501
@@ -27,7 +28,7 @@
 #define SD_SEND SHUT_WR
 #define SD_RECEIVE SHUT_RD
 #endif
-#define USE_SSL 0
+#define USE_SSL 1
 #if USE_SSL
 #include<openssl/ssl.h>
 #endif
@@ -97,6 +98,7 @@ namespace PROJECT_NAME{
         bool no_shutdown=false;
         bool isconnected(){return ssl!=nullptr;}
         std::string cacert_file;
+        void (*infocb)(const void*,int,int)=nullptr;
 #endif
         bool failed(int res=0);
         bool init();
@@ -155,6 +157,15 @@ namespace PROJECT_NAME{
 #endif      
             return false;
         }
+
+        bool set_infocb(void (*cb)(const void*,int,int)){
+#if USE_SSL
+            infocb=cb;
+            if(ctx)SSL_CTX_set_info_callback(ctx,(void(*)(const SSL*,int,int))infocb);
+            return true;
+#endif  
+            return false;
+        }
     };
 
     struct HTTPClient{
@@ -170,7 +181,12 @@ namespace PROJECT_NAME{
         int depth=0;
         using HeaderMap=std::multimap<std::string,std::string>;
         HTTPResponse<HeaderMap,std::string> resinfo;
-        long long _time=0;
+        std::chrono::system_clock::duration _time;
+        //long long _time=0;
+        std::string _err;
+        void* reqctx;
+        bool (*request_adder)(void*,std::string&,const HTTPClient*)=nullptr;
+        bool set_err(std::string reason){_err=reason;return true;}
         bool parseurl(std::string url,URLContext<std::string>& ctx,unsigned short& port);
         bool urlencode(URLContext<std::string>& ctx);
         bool make_request(std::string& ret,const char* method,URLContext<std::string>& ctx,const char* body,size_t size);
@@ -179,27 +195,47 @@ namespace PROJECT_NAME{
         bool method_detail(const char* method,const char* url,const char* body,size_t size,bool nobody);
     public:
         bool method(const char* method,const char* url,const char* body=nullptr,size_t size=0,bool nobody=false);
-        const std::string& raw(){return _raw;}
-        const std::string& body(){return _body;}
-        long long time(){return _time;}
+        const std::string& raw()const{return _raw;}
+        const std::string& body()const{return _body;}
+        const std::chrono::system_clock::duration& time()const{return _time;}
+        const std::string& err()const{return _err;}
         bool set_cacert(const std::string& file){return sock.set_cacert(file);}
+        bool set_infocb(void(*cb)(const void*,int,int)){return sock.set_infocb(cb);}
         bool set_default_path(const std::string& path){default_path=path;return true;}
         bool set_encoded(bool val){encoded=val;return true;}
         bool set_auto_redirect(bool val){auto_redirect=val;return true;}
+        bool set_requestadder(bool(*add)(void*,std::string&,const HTTPClient*),void* ctx);
         bool get(const char* url){return method("GET",url);}
         bool head(const char*url){return method("HEAD",url,nullptr,0,true);}
-        bool post(const char* url,const char* body,size_t size){if(!body||!size)return false; return method("POST",url,body,size);}
-        bool put(const char* url,const char* body,size_t size){if(!body||!size)return false; return method("PUT",url,body,size);}
-        bool patch(const char* url,const char* body,size_t size){if(!body||!size)return false; return method("PATCH",url,body,size);}
+        bool post(const char* url,const char* body,size_t size){
+            if(!body||!size){
+                set_err("no body is not allowed for POST");
+                return false; 
+            }
+            return method("POST",url,body,size);
+        }
+        bool put(const char* url,const char* body,size_t size){
+            if(!body||!size){
+                set_err("no body is not allowed for PUT");
+                return false; 
+            }
+            return method("PUT",url,body,size);
+        }
+        bool patch(const char* url,const char* body,size_t size){
+            if(!body||!size){
+                set_err("no body is not allowed for PATCH");
+                return false; 
+            }
+            return method("PATCH",url,body,size);
+        }
         bool options(const char* url){return method("OPTIONS",url);}
         bool trace(const char* url,const char* body=nullptr,size_t size=0){return method("TRACE",url,body,size);}
         bool _delete(const char* url,const char* body=nullptr,size_t size=0){return method("DELETE",url,body,size);}
-        unsigned short statuscode(){return resinfo.statuscode;}
-        const std::string& reasonphrase(){return resinfo.reason;}
-        int version(){return resinfo.version;}
+        unsigned short statuscode()const{return resinfo.statuscode;}
+        const std::string& reasonphrase()const{return resinfo.reason;}
+        int version()const{return resinfo.version;}
         auto header()->
-        decltype(resinfo.header.buf){return resinfo.header.buf;}
+        decltype(resinfo.header.buf)const{return resinfo.header.buf;}
         bool method_if_exist(const char* method,const char* url,const char* body=nullptr,size_t size=0);
     };
-
 }

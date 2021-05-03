@@ -526,10 +526,11 @@ namespace PROJECT_NAME{
             if(!self->readwhile(key,until,':')){
                 return true;
             }
-            if(!self->expect(": ")){
+            if(!self->expect(":")){
                 ctx.synerr=true;
                 return true;
             }
+            self->expect(" ");
             if(!self->readwhile(value,until,'\r')){
                 return true;
             }

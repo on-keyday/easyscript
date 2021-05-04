@@ -483,10 +483,10 @@ bool HTTPClient::method_if_exist(const char* method,const char* url,const char* 
         return options(url);
     }
     else if(check("TRACE")){
-        return trace(url,body,size);
+        return trace(url);
     }
     else if(check("DELETE")){
-        return _delete(url);
+        return _delete(url,body,size);
     }
     set_err("method "+std::string(method)+" not found");
     return false;

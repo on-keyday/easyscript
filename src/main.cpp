@@ -88,7 +88,7 @@ int main(int argc,char** argv){
     std::cout << get_result(script)<< "\n";
     delete_script(script);
     hardtest();
-    netclient_start(R"(client -aiv D:\JokeScript\NetWork\scraping\cacert.pem get https://google.com)");
+    netclient_start(R"(client -aivt D:\JokeScript\NetWork\scraping\cacert.pem get https://google.com)");
     WSACleanup();
     return 0;
 }

@@ -229,7 +229,7 @@ namespace PROJECT_NAME{
             return method("PATCH",url,body,size);
         }
         bool options(const char* url){return method("OPTIONS",url);}
-        bool trace(const char* url,const char* body=nullptr,size_t size=0){return method("TRACE",url,body,size);}
+        bool trace(const char* url){return method("TRACE",url);}
         bool _delete(const char* url,const char* body=nullptr,size_t size=0){return method("DELETE",url,body,size);}
         unsigned short statuscode()const{return resinfo.statuscode;}
         const std::string& reasonphrase()const{return resinfo.reason;}

@@ -409,8 +409,30 @@ bool HTTPClient::method_detail(const char* method,const char* url,const char* bo
         sock.close();
         return false;
     }
+    set_ip_addr();
     if(!keep_alive)sock.close();
     set_err("no error");
+    return true;
+}
+
+bool HTTPClient::set_ip_addr(){
+    auto info=sock.get_basesock().getinfo();
+    char addrbuf[70]={0};
+    if(info->ai_family==AF_INET){
+        auto addr=(sockaddr_in*)info->ai_addr;
+        auto tmp=inet_ntop(AF_INET,&addr->sin_addr,addrbuf,70);
+        if(!tmp)return false;
+    }
+    else if(info->ai_family==AF_INET6){
+        auto addr=(sockaddr_in6*)info->ai_addr;
+        auto tmp=inet_ntop(AF_INET6,&addr->sin6_addr,addrbuf,70);
+        if(!tmp)return false;
+    }
+    else{
+        _ipaddr="";
+        return false;
+    }
+    _ipaddr=addrbuf;
     return true;
 }
 
@@ -419,7 +441,7 @@ bool HTTPClient::method(const char* method,const char* url,const char* body,size
     bool res=false;
     auto begin=std::chrono::system_clock::now();
     if(method_detail(method,url,body,size,nobody)){
-        if(resinfo.statuscode>=301&&resinfo.statuscode<=308){
+        if(auto_redirect&&resinfo.statuscode>=301&&resinfo.statuscode<=308){
             if(resinfo.header.buf.count("location")){
                 std::string locale=(*resinfo.header.buf.equal_range("location").first).second;
                 auto tmphold=encoded;
@@ -440,6 +462,7 @@ bool HTTPClient::method(const char* method,const char* url,const char* body,size
 }
 
 bool HTTPClient::set_requestadder(bool(*add)(void*,std::string&,const HTTPClient*),void* ctx){
+    if(add==request_adder)return true;
     if(!add){
         request_adder=add;
         return true;
@@ -447,12 +470,15 @@ bool HTTPClient::set_requestadder(bool(*add)(void*,std::string&,const HTTPClient
     std::string teststr;
     add(ctx,teststr,this);
     if(teststr=="")return false;
+    teststr+="\r\n";
     HTTPHeaderContext<std::multimap<std::string,std::string>,std::string> headertest;
-    Reader<std::string>(teststr).readwhile(httpheader,headertest);
+    Reader<std::string> check(teststr);
+    check.readwhile(httpheader,headertest);
     if(!headertest.succeed)return false;
+    if(!check.ceof())return false;
     if(headertest.buf.count("content-length")||headertest.buf.count("host"))return false;
     request_adder=add;
-    ctx=ctx;
+    reqctx=ctx;
     return true;
 }
 
@@ -488,6 +514,6 @@ bool HTTPClient::method_if_exist(const char* method,const char* url,const char* 
     else if(check("DELETE")){
         return _delete(url,body,size);
     }
-    set_err("method "+std::string(method)+" not found");
+    set_err("method '"+std::string(method)+"' not found");
     return false;
 }

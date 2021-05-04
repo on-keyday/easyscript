@@ -166,6 +166,8 @@ namespace PROJECT_NAME{
 #endif  
             return false;
         }
+
+        ClientSocket& get_basesock(){return sock;}
     };
 
     struct HTTPClient{
@@ -184,7 +186,8 @@ namespace PROJECT_NAME{
         std::chrono::system_clock::duration _time;
         //long long _time=0;
         std::string _err;
-        void* reqctx;
+        std::string _ipaddr;
+        void* reqctx=nullptr;
         bool (*request_adder)(void*,std::string&,const HTTPClient*)=nullptr;
         bool set_err(std::string reason){_err=reason;return true;}
         bool parseurl(std::string url,URLContext<std::string>& ctx,unsigned short& port);
@@ -192,6 +195,7 @@ namespace PROJECT_NAME{
         bool make_request(std::string& ret,const char* method,URLContext<std::string>& ctx,const char* body,size_t size);
         bool parse_response(Reader<std::string>& response,bool ishead);
         bool read_body(Reader<std::string>& response,HTTPResponse<HeaderMap,std::string>& ctx);
+        bool set_ip_addr();
         bool method_detail(const char* method,const char* url,const char* body,size_t size,bool nobody);
     public:
         bool method(const char* method,const char* url,const char* body=nullptr,size_t size=0,bool nobody=false);
@@ -199,6 +203,7 @@ namespace PROJECT_NAME{
         const std::string& body()const{return _body;}
         const std::chrono::system_clock::duration& time()const{return _time;}
         const std::string& err()const{return _err;}
+        const std::string& ipaddress() const{return  _ipaddr;}
         bool set_cacert(const std::string& file){return sock.set_cacert(file);}
         bool set_infocb(void(*cb)(const void*,int,int)){return sock.set_infocb(cb);}
         bool set_default_path(const std::string& path){default_path=path;return true;}

@@ -6,14 +6,12 @@
 
 #include"reader.h"
 #include"reader_helper.h"
-#include"socket.h"
 #include<string>
 #include<vector>
 #include<map>
 #include<iostream>
 #include"easyscript/script.h"
 #include"hardscript/hardtest.h"
-#include"sockinterpreter.h"
 
 using namespace PROJECT_NAME;
 using strreader=Reader<std::string>;
@@ -71,11 +69,6 @@ int WaitProxy(void* ctx,const char* membname,ArgContext* arg){
 }
 
 int main(int argc,char** argv){
-    /*if(argc<=1){
-        
-    }*/
-    WSAData data;
-    WSAStartup(MAKEWORD(2,2),&data);
     auto script=make_script();
     if(!script)return -1;
     //add_sourece_from_file(script,"D:\\CommonLib\\CommonLib2\\src\\easyscript\\easytest.ess");
@@ -85,10 +78,9 @@ int main(int argc,char** argv){
 #endif
     add_builtin_object(script,"Console",ConsoleProxy,&argc);
     execute(script,1);
-    std::cout << get_result(script)<< "\n";
+    //std::cout << get_result(script)<< "\n";
     delete_script(script);
     hardtest();
-    netclient_start(R"(client -aivt D:\JokeScript\NetWork\scraping\cacert.pem get https://google.com)");
-    WSACleanup();
+    //auto ret=netclient_argv(argc,argv);
     return 0;
 }

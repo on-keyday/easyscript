@@ -860,7 +860,9 @@ namespace PROJECT_NAME{
                 }
                 Buf num;
                 self->readwhile(num,until,'\r');
-                if(!self->expect("\r\n"))return false;
+                while(!self->expect("\r\n")){
+                    if(!ctx->recv(self->ref()))return false;
+                }
                 auto size=ctx->strtosz(num,res,16);
                 if(!res)return false;
                 if(size==0)break;
@@ -872,7 +874,9 @@ namespace PROJECT_NAME{
                 ret.resize(sum);
                 memmove(&ret.data()[prevsum],&self->ref().data()[self->readpos()],size);
                 self->seek(self->readpos()+size);
-                if(!self->expect("\r\n"))return false;
+                while(!self->expect("\r\n")){
+                    if(!ctx->recv(self->ref()))return false;
+                }
             }
             ctx->succeed=true;
         }

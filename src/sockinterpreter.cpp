@@ -1,3 +1,4 @@
+#define DLL_EXPORT __declspec(dllexport)
 #include"socket.h"
 #include"sockinterpreter.h"
 #include<iostream>
@@ -75,6 +76,10 @@ struct flags{
     bool allcerr=false;
     bool interactive=false;
     bool saveonlysucceed=false;
+    bool noinfo=false;
+    std::multimap<std::string,std::string> customheader;
+    bool add_reqmake=false;
+    bool out_and_err=false;
 };
 
 #if !_WIN32||defined __GNUC__
@@ -114,7 +119,7 @@ bool is_success_status(unsigned short statucode){
     return statucode>=200&&statucode<300;
 }
 
-Status unsafe_method(std::string& name,Reader<std::string>& cmdline,HTTPClient& client,flags& flag,std::string& file){
+Status unsafe_method(std::string& name,Reader<std::string>& cmdline,HTTPClient& client,flags& flag,std::string& url,std::string& file){
     Reader<std::string> checker(name);
     checker.readwhile(untilincondition_nobuf,is_alphabet<char>);
     if(!checker.ceof())return Status::argconditionnotmatch;
@@ -122,14 +127,14 @@ Status unsafe_method(std::string& name,Reader<std::string>& cmdline,HTTPClient& 
     if(cmdline.expect("no-body",is_c_id_usable)){
         nobody=false;
     }
-    std::string url,body;
+    std::string body;
     if(!parse_cmdline(cmdline,1,true,url,body))return Status::argnumnotmatch;
     if(!parse_cmdline(cmdline,0,!flag.filepayload,file))return Status::argconditionnotmatch;
     if(body!=""&&flag.filepayload){
         auto loadf=read_from_file(body,file);
         if(loadf!=Status::succeed)return loadf;
     }
-    if(!client.method(name.c_str(),url.c_str(),body.c_str(),body.size(),nobody))return Status::httperror;
+    if(!client.method(checker.ref().c_str(),url.c_str(),body.c_str(),body.size(),nobody))return Status::httperror;
     if(file!=""){
         if(flag.saveonlysucceed&&!is_success_status(client.statuscode()))return Status::notsucceedstatus;
         return write_to_file(client,file);
@@ -137,10 +142,10 @@ Status unsafe_method(std::string& name,Reader<std::string>& cmdline,HTTPClient& 
     return Status::succeed;
 }
 
-Status httpmethod(Reader<std::string>& cmdline,HTTPClient& client,flags& flag,std::string& file){
-    std::string method,url,body;
+Status httpmethod(Reader<std::string>& cmdline,HTTPClient& client,flags& flag,std::string& file,std::string& url){
+    std::string method,body;
     if(!parse_cmdline(cmdline,2,true,method,url))return Status::argnumnotmatch;
-    if(method=="method")return unsafe_method(url,cmdline,client,flag,file);
+    if(method=="method")return unsafe_method(url,cmdline,client,flag,file,url);
     auto meteq=[&method](auto... args){
         return orlink(method,args...);
     }; 
@@ -169,29 +174,67 @@ template<class Stream>
 void print(Stream&){}
 
 template<class Stream,class First,class... Args>
-void print(Stream& st,First& first,Args... args){
+void print(Stream& st,First first,Args... args){
     st << first;
     print(st,args...);
 }
 
 bool cerrf=false;
+bool out_err=false;
+
+template<class... Args>
+void print_with_flag(flags& flag,Args... args){
+    if(flag.out_and_err){
+        print(std::cout,args...);
+        print(std::cerr,args...);
+    }
+    else{
+        print(flag.allcerr?std::cerr:std::cout,args...);
+    }
+}
+
+
+Status set_custom_header(Reader<std::string>& cmdline,flags& flag,bool enable){
+    std::string header,key,value;
+    if(!parse_cmdline(cmdline,1,false,header))return Status::argnumnotmatch;
+    Reader<std::string> check(header);
+    check.readwhile(key,untilincondition,[](char c){
+        return is_alphabet(c)||c=='-';
+    });
+    if(enable){
+        if(!check.expect(":"))return Status::argconditionnotmatch;
+        check.expect(" ");
+        check.readwhile(value,untilincondition,[](char c){return true;});
+        flag.customheader.insert({{key,value}});
+    }
+    else{
+        flag.customheader.erase(key);
+    }
+    return Status::succeed;
+}
 
 Status set_options(const std::string& opt,Reader<std::string>& cmdline,flags& flag,bool enable){
     auto print_hook=[&flag](auto... args){
-        print(flag.allcerr?std::cerr:std::cout,args...);
+        print_with_flag(flag,args...);
     };
     auto print_hookln=[&print_hook](auto... args){
         print_hook(args...,"\n");
     };
     if(opt=="")return Status::argnumnotmatch;
     if(opt=="all"){
-        return set_options("hafuei",cmdline,flag,enable);
+        return set_options("hafueisn",cmdline,flag,enable);
     }
     if(opt=="header"){
         flag.responseheader=enable;
     }
     else if(opt=="body"){
         flag.onlybody=enable;
+    }
+    else if(opt=="custom-header"){
+        auto tmp=set_custom_header(cmdline,flag,enable);
+        if(tmp!=Status::succeed){
+            print_hookln("arg not matched.");
+        }
     }
     else if(opt=="url-encoded"){
         flag.urlencoded=enable;
@@ -224,10 +267,20 @@ Status set_options(const std::string& opt,Reader<std::string>& cmdline,flags& fl
         flag.allcerr=enable;
         cerrf=enable;
     }
+    else if(opt=="out-and-err"){
+        flag.out_and_err=enable;
+        out_err=enable;
+    }
+    else if(opt=="save-if-succeed"){
+        flag.saveonlysucceed=enable;
+    }
+    else if(opt=="no-info"){
+        flag.noinfo=enable;
+    }
     else{
         for(auto c:opt){
             if(c=='A'){
-                set_options("hafuei",cmdline,flag,enable);
+                set_options("hafueisn",cmdline,flag,enable);
             }
             else if(c=='h'){
                 flag.responseheader=enable;
@@ -261,9 +314,26 @@ Status set_options(const std::string& opt,Reader<std::string>& cmdline,flags& fl
             }
             else if(c=='e'){
                 flag.allcerr=enable;
+                cerrf=enable;
             }
             else if(c=='t'){
                 flag.interactive=enable;
+            }
+            else if(c=='s'){
+                flag.saveonlysucceed=enable;
+            }
+            else if(c=='n'){
+                flag.noinfo=enable;
+            }
+            else if(c=='c'){
+                auto tmp=set_custom_header(cmdline,flag,enable);
+                if(tmp!=Status::succeed){
+                    print_hookln("arg not matched.");
+                }
+            }
+            else if(c=='r'){
+                flag.out_and_err=true;
+                out_err=enable;
             }
             else{
                 print_hookln("option '",c,"' not found");
@@ -274,8 +344,58 @@ Status set_options(const std::string& opt,Reader<std::string>& cmdline,flags& fl
     return Status::succeed;
 }
 
+template<class Func>
+bool show_flag_help(Func& println,bool withm){
+    auto mprintln=[&println,withm](auto longname,auto shortname,auto... caption){
+        println("    ",withm?"-":"",longname,",",withm?"-":"",shortname,":",caption...);
+    };
+    mprintln("header","h","show all response");
+    mprintln("body","b","show body");
+    mprintln("url-encoded","u","not encode url");
+    mprintln("file-payload","f","interpret <body> as filename");
+    mprintln("auto-redirect","a","redirect automatically");
+    mprintln("cacert-file","v","set cacert file location. default:./cacert.pem");
+    mprintln("default-path","d","set default path. default:/");
+    mprintln("interactive","t","use interactive mode");
+    mprintln("use-infocb","i","use ssl info callback");
+    mprintln("stderr","e","all output to stderr");
+    mprintln("save-if-suceed","s","save file if status code succeed");
+    mprintln("no-info","n","not show access infomation");
+    mprintln("custom-header","c","edit custom header");
+    mprintln("out-and-err","r","output both stdout and stderr");
+    mprintln("all","A","set option '",withm?"-":"","hafueisn'");
+    return true;
+}
+
+template<class Func>
+bool print_cmd_status(Func& println,flags& flag){
+    auto printlnf=[&println](auto name,bool f){
+        println(name,f?"true":"false");
+    };
+    printlnf("stderr=",flag.allcerr);
+    printlnf("auto-redirect=",flag.auto_redirect);
+    println("cacert-file=",flag.cacert);
+    println("default-path=",flag.default_path);
+    printlnf("file-payload=",flag.filepayload);
+    printlnf("interactive=",flag.interactive);
+    printlnf("body=",flag.onlybody);
+    printlnf("header=",flag.responseheader);
+    printlnf("url-encoded=",flag.urlencoded);
+    printlnf("use-infocb=",flag.useinfocb);
+    printlnf("save-if-succeed=",flag.saveonlysucceed);
+    printlnf("no-info=",flag.noinfo);
+    printlnf("out-and-err=",flag.out_and_err);
+    println("custom-header={",flag.customheader.size()?"":"}");
+    if(flag.customheader.size()){
+        for(auto& s:flag.customheader){
+            println("    ",s.first,": ",s.second);
+        }
+        println("}");
+    }
+    return true;
+}
+
 Status parse_option(Reader<std::string>& cmdline,flags& flag,bool enable){
-    auto optionfailed=[]{print(std::cerr,"option parse failed\n");};
     while(cmdline.ahead("-")){
         std::string opt;
         if(!parse_cmdline(cmdline,1,false,opt)){
@@ -294,7 +414,15 @@ Status parse_option(Reader<std::string>& cmdline,flags& flag,bool enable){
 }
 
 void info_callback(const void* c,int type,int ret){
-    auto println=[](auto... arg){print(cerrf?std::cerr:std::cout,arg...,"\n");};
+    auto println=[](auto... arg){
+        if(out_err){
+            print(std::cout,arg...,"\n");
+            print(std::cerr,arg...,"\n");
+        }
+        else{
+            print(cerrf?std::cerr:std::cout,arg...,"\n");
+        }
+    };
     auto fmt=[&println,&ret](auto type){println("info:",type," ret:",ret);};
 #if USE_SSL
     if(SSL_CB_HANDSHAKE_START==type){
@@ -334,9 +462,22 @@ void info_callback(const void* c,int type,int ret){
 #endif
 }
 
+bool add_header(void* flag,std::string& ret,const HTTPClient* cl){
+    flags* flagp=(flags*)flag;
+    if(!flagp->add_reqmake){
+        ret.append("accept: */*\r\n");
+        flagp->add_reqmake=true;
+        return true;
+    }
+    for(auto& it:flagp->customheader){
+        ret.append(it.first+": "+it.second+"\r\n");
+    }
+    return true;
+}
+
 Status run_httpmethod(Reader<std::string>& cmdline,HTTPClient& client,flags& flag){
     auto print_hook=[&flag](auto... args){
-        print(flag.allcerr?std::cerr:std::cout,args...);
+        print_with_flag(flag,args...);
     };
     auto print_hookln=[&print_hook](auto... args){
         print_hook(args...,"\n");
@@ -347,8 +488,8 @@ Status run_httpmethod(Reader<std::string>& cmdline,HTTPClient& client,flags& fla
     client.set_encoded(flag.urlencoded);
     client.set_infocb(flag.useinfocb?info_callback:nullptr);
     cerrf=flag.allcerr;
-    std::string savedfile;
-    auto res=httpmethod(cmdline,client,flag,savedfile);
+    std::string savedfile,url;
+    auto res=httpmethod(cmdline,client,flag,savedfile,url);
     if(res==Status::succeed||res==Status::notsucceedstatus||res==Status::fileoutopenerr||res==Status::filewriteerror){
         if(flag.onlybody){
             print_hookln(client.body());
@@ -356,25 +497,29 @@ Status run_httpmethod(Reader<std::string>& cmdline,HTTPClient& client,flags& fla
         else if(flag.responseheader){
             print_hookln(client.raw());
         }
-        print_hookln("status code:",client.statuscode());
-        print_hookln("reason phrase:",client.reasonphrase());
-        auto delta=std::chrono::duration_cast<std::chrono::microseconds>(client.time()).count();
-        print_hookln("time:",delta/1000.0," msec");
-        if(client.body().size()==0){
-            print_hookln("no content");
-        }
-        else{
-            print_hookln("content length is ",client.body().length());
-        }
-        auto header_show=[&client,&print_hookln](auto name,auto key,bool are=false){
-            if(client.header().count(key)==1){
-                print_hookln(name,are?" are ":" is ",(*client.header().equal_range(key).first).second);
+        if(!flag.noinfo){
+            print_hookln("url:",url);
+            print_hookln("accessed address:",client.ipaddress());
+            print_hookln("status code:",client.statuscode());
+            print_hookln("reason phrase:",client.reasonphrase());
+            auto delta=std::chrono::duration_cast<std::chrono::microseconds>(client.time()).count();
+            print_hookln("time:",delta/1000.0," msec");
+            if(client.body().size()==0){
+                print_hookln("no content");
             }
-        };
-        header_show("server","server");
-        header_show("content type","content-type");
-        header_show("location","location");
-        header_show("allow method","allow",true);
+            else{
+                print_hookln("content length is ",client.body().length());
+            }
+            auto header_show=[&client,&print_hookln](auto name,auto key,bool are=false){
+                if(client.header().count(key)==1){
+                    print_hookln(name,are?" are ":" is ",(*client.header().equal_range(key).first).second);
+                }
+            };
+            header_show("server","server");
+            header_show("content type","content-type");
+            header_show("location","location");
+            header_show("allow method","allow",true);
+        }
         if(res==Status::fileoutopenerr){
             print_hookln("file '"+savedfile+"' was selected to save but couldn't open.");
         }
@@ -407,41 +552,10 @@ Status run_httpmethod(Reader<std::string>& cmdline,HTTPClient& client,flags& fla
 }
 
 template<class Func>
-bool print_cmd_status(Func& println,flags& flag){
-    println("stderr=",flag.allcerr);
-    println("auto-redirect=",flag.auto_redirect);
-    println("cacert-file=",flag.cacert);
-    println("default-path=",flag.default_path);
-    println("file-payload=",flag.filepayload);
-    println("interactive=",flag.interactive);
-    println("body=",flag.onlybody);
-    println("header=",flag.responseheader);
-    println("url-encoded=",flag.urlencoded);
-    println("use-infocb=",flag.useinfocb);
-    return true;
-}
-
-template<class Func>
-bool show_flag_help(Func& println,bool withm){
-    auto mprintln=[&println,withm](auto longname,auto shortname,auto... caption){
-        println(withm?"-":"",longname,",",withm?"-":"",shortname,":",caption...);
+bool show_http_help(Func& printl){
+    auto println=[&printl](auto arg){
+        printl("    ",arg);
     };
-    mprintln("header","h","show all response");
-    mprintln("body","b","show body");
-    mprintln("url-encoded","u","not encode url");
-    mprintln("file-payload","f","interpret <body> as filename");
-    mprintln("auto-redirect","a","redirect automatically");
-    mprintln("cacert-file","v","set cacert file location. default:./cacert.pem");
-    mprintln("default-path","d","set default path. default:/");
-    mprintln("interactive","t","use interactive mode");
-    mprintln("use-infocb","i","use ssl info callback");
-    mprintln("stderr","e","all output to stderr");
-    mprintln("all","A","set option",withm?"-":"","hafuei");
-    return true;
-}
-
-template<class Func>
-bool show_http_help(Func& println){
     println("get <url> [<savefile>]");
     println("head <url>");
     println("post <url> <body> [<savefile>]");
@@ -459,29 +573,38 @@ bool show_cmdline_help(Func& println,const std::string& usage){
     println("Usage:");
     println(usage);
     println("http method:");
-    show_http_help();
+    show_http_help(println);
     println("other method:");
-    println("help:show this help");
+    println("    help:show this help");
     println("flags:");
     show_flag_help(println,true);
     return true;
 }
 
 template<class Func>
-bool show_interpreter_help(Func& println,const std::string& usage){
+bool show_interactive_help(Func& println,const std::string& usage){
     println("Usage:");
     println(usage);
     println("http method:");
-    show_http_help();
+    show_http_help(println);
+    auto printlnt=[&println](auto arg){
+        println("    ",arg);
+    };
     println("other method:");
-    println("flag")
+    printlnt("flag [<flag>] [<arg>]:show flag");
+    printlnt("cd <dirname>:set current directory");
+    printlnt("help:show this help");
+    printlnt("clear:clear console");
+    printlnt("exit:finish interactive mode");
+    printlnt("quit:same as exit");
     println("flags:");
     show_flag_help(println,false);
+    return true;
 }
 
 Status command_one(Reader<std::string>& cmdline,HTTPClient& client,flags& flag){
     auto print_hook=[&flag](auto... args){
-        print(flag.allcerr?std::cerr:std::cout,args...);
+        print_with_flag(flag,args...);
     };
     auto print_hookln=[&print_hook](auto... args){
         print_hook(args...,"\n");
@@ -503,6 +626,10 @@ Status command_one(Reader<std::string>& cmdline,HTTPClient& client,flags& flag){
         }
         Status ret;
         if(opt!=""){
+            if(opt[0]=='!'){
+                opt.erase(0,1);
+                enable=!enable;
+            }
             ret=set_options(opt,cmdline,flag,enable);
         }
         print_cmd_status(print_hookln,flag);
@@ -523,17 +650,21 @@ Status command_one(Reader<std::string>& cmdline,HTTPClient& client,flags& flag){
 		}
         return Status::cdchanged;
     }
+    else if(cmdline.expect("clear",is_c_id_usable)){
+        ::system("cls");
+    }
     else if(cmdline.expect("help",is_c_id_usable)){
-        show_interpreter_help(print_hookln,"<method> <args>");
+        show_interactive_help(print_hookln,"<method> <args>");
     }
     else{
         return run_httpmethod(cmdline,client,flag);
     }
+    return Status::succeed;
 }
 
 bool interactive_mode(HTTPClient& client,flags& flag){
     auto print_hook=[&flag](auto... args){
-        print(flag.allcerr?std::cerr:std::cout,args...);
+        print_with_flag(flag,args...);
     };
     auto print_hookln=[&print_hook](auto... args){
         print_hook(args...,"\n");
@@ -564,7 +695,7 @@ bool interactive_mode(HTTPClient& client,flags& flag){
     return true;
 }
 
-int netclient_start(const char* str){
+int netclient_str(const char* str){
     if(!str)return -1;
     Reader<std::string> cmdline(str,ignore_space);
     std::string procname;
@@ -575,18 +706,52 @@ int netclient_start(const char* str){
         return (int)s;
     }
     if(cmdline.expect("help",is_c_id_usable)){
-        show_cmdline_help([&gflag](auto... arg){
-            print(gflag.allcerr?std::cerr,std::cout,arg...,"\n");
-        },procname+" <option> <http method>");
+        auto println=[&gflag](auto... arg){
+            print_with_flag(gflag,arg...,"\n");
+        };
+        show_cmdline_help(println,procname+" <option> <method>");
         return 0;
     }
     HTTPClient client;
+    client.set_requestadder(add_header,&gflag);
     int ret=0;
+    bool entered=false;
     if(gflag.interactive){
         interactive_mode(client,gflag);
+        entered=true;
     }
-    else{
+    if(!cmdline.eof()){
         ret=(int)run_httpmethod(cmdline,client,gflag);
     }
+    else if(!entered){
+        print_with_flag(gflag,"input method!\n");
+        return -1;
+    }
+    //print(gflag.allcerr?std::cerr:std::cout,"debug:",cmdline.ref());
     return ret;
+}
+
+int netclient_argv(int argc,char** argv){
+    std::string argstr;
+    for(int i=0;i<argc;i++){
+        if(i){
+            argstr+=" ";
+        }
+        if(argv[i][0]=='-'||argv[i][0]=='\''||argv[i][0]=='\"'){
+            argstr+=argv[i];
+        }
+        else{
+            Reader<std::string> check(argv[i]);
+            check.readwhile(untilincondition_nobuf,is_alpha_or_num<char>);
+            if(check.ceof()){
+                argstr+=argv[i];
+            }
+            else{
+                argstr+="'";
+                argstr+=argv[i];
+                argstr+="'";
+            }
+        }
+    }
+    return netclient_str(argstr.c_str());
 }

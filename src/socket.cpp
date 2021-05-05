@@ -176,6 +176,9 @@ bool SecureSocket::close(){
 
 SecureSocket::~SecureSocket(){
 #if USE_SSL
+    if(ssl){
+        SSL_free(ssl);
+    }
     if(ctx){
         SSL_CTX_free(ctx);
     }

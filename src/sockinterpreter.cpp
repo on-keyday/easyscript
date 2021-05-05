@@ -125,7 +125,7 @@ Status unsafe_method(std::string& name,Reader<std::string>& cmdline,HTTPClient& 
     if(!checker.ceof())return Status::argconditionnotmatch;
     bool nobody=false;
     if(cmdline.expect("no-body",is_c_id_usable)){
-        nobody=false;
+        nobody=true;
     }
     std::string body;
     if(!parse_cmdline(cmdline,1,true,url,body))return Status::argnumnotmatch;
@@ -145,7 +145,7 @@ Status unsafe_method(std::string& name,Reader<std::string>& cmdline,HTTPClient& 
 Status httpmethod(Reader<std::string>& cmdline,HTTPClient& client,flags& flag,std::string& file,std::string& url){
     std::string method,body;
     if(!parse_cmdline(cmdline,2,true,method,url))return Status::argnumnotmatch;
-    if(method=="method")return unsafe_method(url,cmdline,client,flag,file,url);
+    if(method=="method")return unsafe_method(url,cmdline,client,flag,url,file);
     auto meteq=[&method](auto... args){
         return orlink(method,args...);
     }; 
@@ -329,6 +329,7 @@ Status set_options(const std::string& opt,Reader<std::string>& cmdline,flags& fl
                 auto tmp=set_custom_header(cmdline,flag,enable);
                 if(tmp!=Status::succeed){
                     print_hookln("arg not matched.");
+                    return tmp;
                 }
             }
             else if(c=='r'){
@@ -489,7 +490,11 @@ Status run_httpmethod(Reader<std::string>& cmdline,HTTPClient& client,flags& fla
     client.set_infocb(flag.useinfocb?info_callback:nullptr);
     cerrf=flag.allcerr;
     std::string savedfile,url;
+    size_t pos=cmdline.readpos();
     auto res=httpmethod(cmdline,client,flag,savedfile,url);
+    if(!flag.noinfo){
+        print_hookln("command:",&cmdline.ref().c_str()[pos]);
+    }
     if(res==Status::succeed||res==Status::notsucceedstatus||res==Status::fileoutopenerr||res==Status::filewriteerror){
         if(flag.onlybody){
             print_hookln(client.body());
@@ -682,6 +687,7 @@ bool interactive_mode(HTTPClient& client,flags& flag){
         Reader<std::string> cmdline(std::move(input),ignore_space);
         auto res=command_one(cmdline,client,flag);
         if(res==Status::quit){
+            print_hookln("Bye");
             break;
         }
         else if(res==Status::cdchanged){
@@ -705,11 +711,15 @@ int netclient_str(const char* str){
     if(s!=Status::succeed){
         return (int)s;
     }
+    auto println=[&gflag](auto... arg){
+        print_with_flag(gflag,arg...,"\n");
+    };
     if(cmdline.expect("help",is_c_id_usable)){
-        auto println=[&gflag](auto... arg){
-            print_with_flag(gflag,arg...,"\n");
-        };
         show_cmdline_help(println,procname+" <option> <method>");
+        return 0;
+    }
+    else if(cmdline.expect("flag",is_c_id_usable)){
+        print_cmd_status(println,gflag);
         return 0;
     }
     HTTPClient client;

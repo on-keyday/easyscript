@@ -8,6 +8,7 @@ int main(int argc,char** argv){
         std::cout << "wsa init failed.";
         return -1;
     }
+    SSL_load_error_strings();
     auto ret=netclient_argv(argc,argv);
     WSACleanup();
     return ret;

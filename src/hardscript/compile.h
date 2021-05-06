@@ -36,10 +36,13 @@ namespace compiler{
         std::map<std::string,std::string> funcs;
         std::map<std::string,std::string> vars;
     };
-
+    /*
     bool to_bytecode(std::vector<control::Control>& ctrlvec,size_t& pos,IdTable& table,std::string& out);
 
     bool genifcode(std::vector<control::Control>& ctrlvec,size_t& pos,IdTable& table,std::string& out);
 
     bool genbytree(control::Tree* tree,IdTable& table,std::string& out);
+    */
+
+   bool collect_ids(std::vector<control::Control>& ctrlvec,IdTable& table);
 }

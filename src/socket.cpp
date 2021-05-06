@@ -118,7 +118,7 @@ bool SecureSocket::init(){
 		unsigned char proto[] = "\x8http/1.1";
 		SSL_CTX_set_alpn_protos(ctx, proto, 9);
 		SSL_CTX_load_verify_locations(ctx, cacert_file.c_str(), NULL);
-		SSL_CTX_set_verify(ctx, SSL_VERIFY_PEER, nullptr);
+		SSL_CTX_set_verify(ctx, SSL_VERIFY_PEER, (int(*)(int, X509_STORE_CTX *))verifycb);
 		SSL_CTX_set_info_callback(ctx,(void(*)(const SSL*,int,int))infocb);
 	}
     return true;
@@ -261,6 +261,7 @@ bool HTTPClient::make_request(std::string& ret,const char* method,URLContext<std
     if(body&&size){
         ret.append(body,size);
     }
+    _request=ret;
     return true;
 }
 
@@ -273,6 +274,7 @@ bool HTTPClient::parse_response(Reader<std::string>& response,bool ishead){
                 set_err("header syntax error");
                 return false;
             }
+            ctx.reason="";
             sock.recv(response.ref());
             response.seek(0);
             continue;
@@ -377,8 +379,13 @@ bool HTTPClient::method_detail(const char* method,const char* url,const char* bo
         set_err("make request failed.");
         return false;
     }
-    if(!sock.open_if_differnet(ctx.host.c_str(),ctx.scheme.c_str())){
-        set_err("host name not resolved:"+ctx.host);
+    std::string openhost=ctx.host;
+    if(openhost[0]=='['){
+        openhost.erase(0,1);
+        openhost.pop_back();
+    }
+    if(!sock.open_if_differnet(openhost.c_str(),ctx.scheme.c_str())){
+        set_err("host name was not resolved:"+ctx.host);
         return false;
     }
     if(!sock.connect(port)){

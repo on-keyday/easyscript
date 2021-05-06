@@ -99,6 +99,7 @@ namespace PROJECT_NAME{
         bool isconnected(){return ssl!=nullptr;}
         std::string cacert_file;
         void (*infocb)(const void*,int,int)=nullptr;
+        int (*verifycb)(int, void*)=nullptr;
 #endif
         bool failed(int res=0);
         bool init();
@@ -154,6 +155,7 @@ namespace PROJECT_NAME{
         bool set_cacert(const std::string& file){
 #if USE_SSL
             cacert_file=file;return true;
+            if(ctx)SSL_CTX_load_verify_locations(ctx,cacert_file.c_str(),nullptr);
 #endif      
             return false;
         }
@@ -166,6 +168,15 @@ namespace PROJECT_NAME{
 #endif  
             return false;
         }
+
+        bool set_verifycb(int(*cb)(int, void*)){
+#if USE_SSL
+            verifycb=cb;
+            if(ctx)SSL_CTX_set_verify(ctx,SSL_VERIFY_PEER,(int(*)(int, X509_STORE_CTX *))verifycb);
+            return true;
+#endif  
+            return false;
+        } 
 
         ClientSocket& get_basesock(){return sock;}
     };
@@ -187,6 +198,7 @@ namespace PROJECT_NAME{
         //long long _time=0;
         std::string _err;
         std::string _ipaddr;
+        std::string _request;
         void* reqctx=nullptr;
         bool (*request_adder)(void*,std::string&,const HTTPClient*)=nullptr;
         bool set_err(std::string reason){_err=reason;return true;}
@@ -204,8 +216,10 @@ namespace PROJECT_NAME{
         const std::chrono::system_clock::duration& time()const{return _time;}
         const std::string& err()const{return _err;}
         const std::string& ipaddress() const{return  _ipaddr;}
+        const std::string& requesst() const {return _request;}
         bool set_cacert(const std::string& file){return sock.set_cacert(file);}
         bool set_infocb(void(*cb)(const void*,int,int)){return sock.set_infocb(cb);}
+        bool set_verifycb(int(*cb)(int, void*)){return sock.set_verifycb(cb);}
         bool set_default_path(const std::string& path){default_path=path;return true;}
         bool set_encoded(bool val){encoded=val;return true;}
         bool set_auto_redirect(bool val){auto_redirect=val;return true;}

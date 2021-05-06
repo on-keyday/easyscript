@@ -3,6 +3,9 @@
 #include"sockinterpreter.h"
 #include<iostream>
 #include<direct.h>
+#if USE_SSL
+#include <openssl/evp.h>
+#endif
 using namespace PROJECT_NAME;
 
 bool parse_cmdline(Reader<std::string>& cmdline,int must,bool escape){
@@ -61,12 +64,13 @@ enum class Status{
     filewriteerror,
     optionnotfound,
     quit,
-    cdchanged
+    cdchanged,
+    optionerror
 };
 
 struct flags{
     bool auto_redirect=false;
-    bool responseheader=false;
+    bool header=false;
     bool onlybody=false;
     bool filepayload=false;
     bool urlencoded=false;
@@ -80,95 +84,9 @@ struct flags{
     std::multimap<std::string,std::string> customheader;
     bool add_reqmake=false;
     bool out_and_err=false;
+    bool show_request=false;
 };
 
-#if !_WIN32||defined __GNUC__
-#define fopen_s(pfp,filename,mode) (*pfp=fopen(filename,mode))
-#endif
-
-Status read_from_file(std::string& body,std::string& file){
-    FILE* fp=nullptr;
-    fopen_s(&fp,body.c_str(),"rb");
-    if(!fp){
-        file=body;
-        return Status::fileinopenerror;
-    }
-    std::string tmp;
-    while(true){
-        int i=fgetc(fp);
-        if(i==EOF)break;
-        tmp.push_back(i);
-    }
-    body=std::move(tmp);
-    return Status::succeed;
-}
-
-Status write_to_file(HTTPClient& client,std::string& file){
-    if(client.body()=="")return Status::succeed;
-    FILE* fp=nullptr;
-    fopen_s(&fp,file.c_str(),"wb");
-    if(!fp)return Status::fileoutopenerr;
-    size_t size=0;
-    size=fwrite(client.body().data(),1,client.body().size(),fp);
-    fclose(fp);
-    if(size!=client.body().size())return Status::filewriteerror;
-    return Status::succeed;
-}
-
-bool is_success_status(unsigned short statucode){
-    return statucode>=200&&statucode<300;
-}
-
-Status unsafe_method(std::string& name,Reader<std::string>& cmdline,HTTPClient& client,flags& flag,std::string& url,std::string& file){
-    Reader<std::string> checker(name);
-    checker.readwhile(untilincondition_nobuf,is_alphabet<char>);
-    if(!checker.ceof())return Status::argconditionnotmatch;
-    bool nobody=false;
-    if(cmdline.expect("no-body",is_c_id_usable)){
-        nobody=true;
-    }
-    std::string body;
-    if(!parse_cmdline(cmdline,1,true,url,body))return Status::argnumnotmatch;
-    if(!parse_cmdline(cmdline,0,!flag.filepayload,file))return Status::argconditionnotmatch;
-    if(body!=""&&flag.filepayload){
-        auto loadf=read_from_file(body,file);
-        if(loadf!=Status::succeed)return loadf;
-    }
-    if(!client.method(checker.ref().c_str(),url.c_str(),body.c_str(),body.size(),nobody))return Status::httperror;
-    if(file!=""){
-        if(flag.saveonlysucceed&&!is_success_status(client.statuscode()))return Status::notsucceedstatus;
-        return write_to_file(client,file);
-    }
-    return Status::succeed;
-}
-
-Status httpmethod(Reader<std::string>& cmdline,HTTPClient& client,flags& flag,std::string& file,std::string& url){
-    std::string method,body;
-    if(!parse_cmdline(cmdline,2,true,method,url))return Status::argnumnotmatch;
-    if(method=="method")return unsafe_method(url,cmdline,client,flag,url,file);
-    auto meteq=[&method](auto... args){
-        return orlink(method,args...);
-    }; 
-    std::transform(method.begin(),method.end(),method.begin(),
-    [](auto c){return std::tolower((unsigned char)c);});
-    if(meteq("post","put","patch")){
-        if(!parse_cmdline(cmdline,1,true,body))return Status::argnumnotmatch;
-    }
-    else if(meteq("delete")){
-        if(!parse_cmdline(cmdline,0,true,body))return Status::argconditionnotmatch;
-    }
-    if(!parse_cmdline(cmdline,0,!flag.filepayload,file))return Status::argnumnotmatch;
-    if(body!=""&&flag.filepayload){
-        auto loadf=read_from_file(body,file);
-        if(loadf!=Status::succeed)return loadf;
-    }
-    if(!client.method_if_exist(method.c_str(),url.c_str(),body.c_str(),body.size()))return Status::httperror;
-    if(file!=""){
-        if(flag.saveonlysucceed&&!is_success_status(client.statuscode()))return Status::notsucceedstatus;
-        return write_to_file(client,file);
-    }
-    return Status::succeed;
-}
 
 template<class Stream>
 void print(Stream&){}
@@ -225,7 +143,7 @@ Status set_options(const std::string& opt,Reader<std::string>& cmdline,flags& fl
         return set_options("hafueisn",cmdline,flag,enable);
     }
     if(opt=="header"){
-        flag.responseheader=enable;
+        flag.header=enable;
     }
     else if(opt=="body"){
         flag.onlybody=enable;
@@ -277,13 +195,16 @@ Status set_options(const std::string& opt,Reader<std::string>& cmdline,flags& fl
     else if(opt=="no-info"){
         flag.noinfo=enable;
     }
+    else if(opt=="show-request"){
+        flag.show_request=enable;
+    }
     else{
         for(auto c:opt){
             if(c=='A'){
                 set_options("hafueisn",cmdline,flag,enable);
             }
             else if(c=='h'){
-                flag.responseheader=enable;
+                flag.header=enable;
             }
             else if(c=='a'){
                 flag.auto_redirect=enable;
@@ -333,8 +254,11 @@ Status set_options(const std::string& opt,Reader<std::string>& cmdline,flags& fl
                 }
             }
             else if(c=='r'){
-                flag.out_and_err=true;
+                flag.out_and_err=enable;
                 out_err=enable;
+            }
+            else if(c=='l'){
+                flag.show_request=enable;
             }
             else{
                 print_hookln("option '",c,"' not found");
@@ -351,7 +275,8 @@ bool show_flag_help(Func& println,bool withm){
         println("    ",withm?"-":"",longname,",",withm?"-":"",shortname,":",caption...);
     };
     mprintln("header","h","show all response");
-    mprintln("body","b","show body");
+    mprintln("show-request","l","show request");
+    mprintln("body","b","show response body");
     mprintln("url-encoded","u","not encode url");
     mprintln("file-payload","f","interpret <body> as filename");
     mprintln("auto-redirect","a","redirect automatically");
@@ -380,12 +305,13 @@ bool print_cmd_status(Func& println,flags& flag){
     printlnf("file-payload=",flag.filepayload);
     printlnf("interactive=",flag.interactive);
     printlnf("body=",flag.onlybody);
-    printlnf("header=",flag.responseheader);
+    printlnf("header=",flag.header);
     printlnf("url-encoded=",flag.urlencoded);
     printlnf("use-infocb=",flag.useinfocb);
     printlnf("save-if-succeed=",flag.saveonlysucceed);
     printlnf("no-info=",flag.noinfo);
     printlnf("out-and-err=",flag.out_and_err);
+    printlnf("show-request=",flag.show_request);
     println("custom-header={",flag.customheader.size()?"":"}");
     if(flag.customheader.size()){
         for(auto& s:flag.customheader){
@@ -396,7 +322,7 @@ bool print_cmd_status(Func& println,flags& flag){
     return true;
 }
 
-Status parse_option(Reader<std::string>& cmdline,flags& flag,bool enable){
+Status parse_option(Reader<std::string>& cmdline,flags& flag){
     while(cmdline.ahead("-")){
         std::string opt;
         if(!parse_cmdline(cmdline,1,false,opt)){
@@ -408,11 +334,102 @@ Status parse_option(Reader<std::string>& cmdline,flags& flag,bool enable){
             enable=false;
             opt.erase(0,1);
         }
+        if(opt=="")print_with_flag(flag,"not enable option");
         auto res=set_options(opt,cmdline,flag,enable);
         if(res!=Status::succeed)return res;
     }  
     return Status::succeed;
 }
+
+#if !_WIN32||defined __GNUC__
+#define fopen_s(pfp,filename,mode) (*pfp=fopen(filename,mode))
+#endif
+
+Status read_from_file(std::string& body,std::string& file){
+    FILE* fp=nullptr;
+    fopen_s(&fp,body.c_str(),"rb");
+    if(!fp){
+        file=body;
+        return Status::fileinopenerror;
+    }
+    std::string tmp;
+    while(true){
+        int i=fgetc(fp);
+        if(i==EOF)break;
+        tmp.push_back(i);
+    }
+    body=std::move(tmp);
+    return Status::succeed;
+}
+
+Status write_to_file(HTTPClient& client,std::string& file){
+    if(client.body()=="")return Status::succeed;
+    FILE* fp=nullptr;
+    fopen_s(&fp,file.c_str(),"wb");
+    if(!fp)return Status::fileoutopenerr;
+    size_t size=0;
+    size=fwrite(client.body().data(),1,client.body().size(),fp);
+    fclose(fp);
+    if(size!=client.body().size())return Status::filewriteerror;
+    return Status::succeed;
+}
+
+bool is_success_status(unsigned short statucode){
+    return statucode>=200&&statucode<300;
+}
+
+
+Status unsafe_method(std::string& name,Reader<std::string>& cmdline,HTTPClient& client,flags& flag,std::string& url,std::string& file){
+    Reader<std::string> checker(name);
+    checker.readwhile(untilincondition_nobuf,is_alphabet<char>);
+    if(!checker.ceof())return Status::argconditionnotmatch;
+    bool nobody=false;
+    if(cmdline.expect("no-body",is_c_id_usable)){
+        nobody=true;
+    }
+    std::string body;
+    if(!parse_cmdline(cmdline,1,true,url,body))return Status::argnumnotmatch;
+    if(!parse_cmdline(cmdline,0,!flag.filepayload,file))return Status::argconditionnotmatch;
+    if(body!=""&&flag.filepayload){
+        auto loadf=read_from_file(body,file);
+        if(loadf!=Status::succeed)return loadf;
+    }
+    if(!client.method(checker.ref().c_str(),url.c_str(),body.c_str(),body.size(),nobody))return Status::httperror;
+    if(file!=""){
+        if(flag.saveonlysucceed&&!is_success_status(client.statuscode()))return Status::notsucceedstatus;
+        return write_to_file(client,file);
+    }
+    return Status::succeed;
+}
+
+Status httpmethod(std::string& method,Reader<std::string>& cmdline,HTTPClient& client,flags& flag,std::string& file,std::string& url){
+    std::string body;
+    if(!parse_cmdline(cmdline,1,true,url))return Status::argnumnotmatch;
+    if(method=="method")return unsafe_method(url,cmdline,client,flag,url,file);
+    auto meteq=[&method](auto... args){
+        return orlink(method,args...);
+    }; 
+    std::transform(method.begin(),method.end(),method.begin(),
+    [](auto c){return std::tolower((unsigned char)c);});
+    if(meteq("post","put","patch")){
+        if(!parse_cmdline(cmdline,1,true,body))return Status::argnumnotmatch;
+    }
+    else if(meteq("delete")){
+        if(!parse_cmdline(cmdline,0,true,body))return Status::argconditionnotmatch;
+    }
+    if(!parse_cmdline(cmdline,0,!flag.filepayload,file))return Status::argnumnotmatch;
+    if(body!=""&&flag.filepayload){
+        auto loadf=read_from_file(body,file);
+        if(loadf!=Status::succeed)return loadf;
+    }
+    if(!client.method_if_exist(method.c_str(),url.c_str(),body.c_str(),body.size()))return Status::httperror;
+    if(file!=""){
+        if(flag.saveonlysucceed&&!is_success_status(client.statuscode()))return Status::notsucceedstatus;
+        return write_to_file(client,file);
+    }
+    return Status::succeed;
+}
+
 
 void info_callback(const void* c,int type,int ret){
     auto println=[](auto... arg){
@@ -463,6 +480,65 @@ void info_callback(const void* c,int type,int ret){
 #endif
 }
 
+int verify_callback(int ret,void* ctxp){
+#if USE_SSL
+    auto println=[](auto... arg){
+        if(out_err){
+            print(std::cout,arg...,"\n");
+            print(std::cerr,arg...,"\n");
+        }
+        else{
+            print(cerrf?std::cerr:std::cout,arg...,"\n");
+        }
+    };
+    X509_STORE_CTX* ctx=(X509_STORE_CTX*)ctxp;
+    if(!ret){
+        auto err=X509_verify_cert_error_string(X509_STORE_CTX_get_error(ctx));
+        if(err)println("error:",err);
+    }
+    println("depth:",X509_STORE_CTX_get_error_depth(ctx));
+    auto cert=X509_STORE_CTX_get0_cert(ctx);
+    if(!cert){
+        println("warning:can't get cert.");
+        return ret;
+    }
+    auto subjectname=X509_get_subject_name(cert);
+    if(!subjectname){
+        println("warning:can't get subjectname.");
+        return ret;
+    }
+    auto max=X509_NAME_entry_count(subjectname);
+    char namebuf[300]={0};
+    for(auto i=0;i<max;i++){
+        auto entry=X509_NAME_get_entry(subjectname,i);
+        if(!entry)continue;
+        auto asn1obj=X509_NAME_ENTRY_get_object(entry);
+        auto asn1data=X509_NAME_ENTRY_get_data(entry);
+        if(!asn1data||!asn1obj)continue;
+        OBJ_obj2txt(namebuf,200,asn1obj,0);
+        auto datastr=ASN1_STRING_get0_data(asn1data);
+        if(!datastr)continue;
+        std::string value((const char*)datastr,ASN1_STRING_length(asn1data));
+        println(namebuf,"=",value);
+    }
+    println("");
+    auto pubkey=X509_get0_pubkey(cert);
+    if(!pubkey){
+        println("warning:can't get public key.");
+        return ret;
+    }
+    //auto toprint=EVP_PKEY_description(pubkey);
+    //Reader<std::string> pubkeys(std::string(namebuf,len));
+    //std::string toprint;
+    //Base64Context bctx;
+    //bctx.c62='-';
+    //bctx.c63='_';
+    //pubkeys.readwhile(toprint,base64_encode,&bctx);
+    //if(toprint)println(toprint);
+#endif
+    return ret;
+}
+
 bool add_header(void* flag,std::string& ret,const HTTPClient* cl){
     flags* flagp=(flags*)flag;
     if(!flagp->add_reqmake){
@@ -483,32 +559,52 @@ Status run_httpmethod(Reader<std::string>& cmdline,HTTPClient& client,flags& fla
     auto print_hookln=[&print_hook](auto... args){
         print_hook(args...,"\n");
     };
+    size_t pos=cmdline.readpos();
+    if(!flag.noinfo){
+        print_hookln("command:",&cmdline.ref().c_str()[pos]);
+    }
+    std::string method,savedfile,url;
+    if(!parse_cmdline(cmdline,1,true,method))return Status::argnumnotmatch;
+    auto tmp=parse_option(cmdline,flag);
+    if(tmp!=Status::succeed)return tmp;
     client.set_auto_redirect(flag.auto_redirect);
     client.set_cacert(flag.cacert);
     client.set_default_path(flag.default_path);
     client.set_encoded(flag.urlencoded);
     client.set_infocb(flag.useinfocb?info_callback:nullptr);
+    client.set_verifycb(flag.useinfocb?verify_callback:nullptr);
     cerrf=flag.allcerr;
-    std::string savedfile,url;
-    size_t pos=cmdline.readpos();
-    auto res=httpmethod(cmdline,client,flag,savedfile,url);
-    if(!flag.noinfo){
-        print_hookln("command:",&cmdline.ref().c_str()[pos]);
-    }
+    out_err=flag.out_and_err;
+    auto res=httpmethod(method,cmdline,client,flag,savedfile,url);
     if(res==Status::succeed||res==Status::notsucceedstatus||res==Status::fileoutopenerr||res==Status::filewriteerror){
+        if(flag.show_request){
+            print_hook(client.requesst());
+            print_hookln("");
+        }
         if(flag.onlybody){
-            print_hookln(client.body());
+            print_hook(client.body());
+            if(!flag.noinfo)print_hookln("");
         }
-        else if(flag.responseheader){
-            print_hookln(client.raw());
+        else if(flag.header){
+            print_hook(client.raw());
+            if(!flag.noinfo)print_hookln("");
         }
+        
         if(!flag.noinfo){
             print_hookln("url:",url);
             print_hookln("accessed address:",client.ipaddress());
             print_hookln("status code:",client.statuscode());
             print_hookln("reason phrase:",client.reasonphrase());
-            auto delta=std::chrono::duration_cast<std::chrono::microseconds>(client.time()).count();
-            print_hookln("time:",delta/1000.0," msec");
+            auto delta=std::chrono::duration_cast<std::chrono::nanoseconds>(client.time()).count();
+            if(delta<1000){
+                print_hookln("time:",delta," nsec");
+            }
+            else if(delta<1000*1000){
+                print_hookln("time:",delta/1000.0," usec");
+            }
+            else{
+                print_hookln("time:",delta/(1000.0*1000.0)," msec");
+            }
             if(client.body().size()==0){
                 print_hookln("no content");
             }
@@ -561,15 +657,15 @@ bool show_http_help(Func& printl){
     auto println=[&printl](auto arg){
         printl("    ",arg);
     };
-    println("get <url> [<savefile>]");
-    println("head <url>");
-    println("post <url> <body> [<savefile>]");
-    println("put <url> <body> [<savefile>]");
-    println("patch <url> <body> [<savefile>]");
-    println("options <url> [<savefile>]");
-    println("trace <url> [<savefile>]");
-    println("delete <url> [<savefile>]");
-    println("method <method> [no-body] <url> [<body>] [<savefile>] (not recommended)");
+    println("get [<option>] <url> [<savefile>]");
+    println("head [<option>] <url>");
+    println("post [<option>] <url> <body> [<savefile>]");
+    println("put [<option>] <url> <body> [<savefile>]");
+    println("patch [<option>] <url> <body> [<savefile>]");
+    println("options [<option>] <url> [<savefile>]");
+    println("trace [<option>] <url> [<savefile>]");
+    println("delete [<option>] <url> [<body>] [<savefile>]");
+    println("method [<option>] <method> [no-body] <url> [<body>] [<savefile>] (not recommended)");
     return true;
 }
 
@@ -603,7 +699,7 @@ bool show_interactive_help(Func& println,const std::string& usage){
     printlnt("exit:finish interactive mode");
     printlnt("quit:same as exit");
     println("flags:");
-    show_flag_help(println,false);
+    show_flag_help(println,true);
     return true;
 }
 
@@ -615,7 +711,7 @@ Status command_one(Reader<std::string>& cmdline,HTTPClient& client,flags& flag){
         print_hook(args...,"\n");
     };
     if(cmdline.expect("flag",is_c_id_usable)){
-        bool enable=true;
+        /*bool enable=true;
         int expected=0;
         if(cmdline.expect("true",is_c_id_usable)){
             expected=1;
@@ -636,7 +732,8 @@ Status command_one(Reader<std::string>& cmdline,HTTPClient& client,flags& flag){
                 enable=!enable;
             }
             ret=set_options(opt,cmdline,flag,enable);
-        }
+        }*/
+        auto ret=parse_option(cmdline,flag);
         print_cmd_status(print_hookln,flag);
         return ret;
     }
@@ -707,7 +804,7 @@ int netclient_str(const char* str){
     std::string procname;
     if(!parse_cmdline(cmdline,1,false,procname))return -1;
     flags gflag;
-    auto s=parse_option(cmdline,gflag,true);
+    auto s=parse_option(cmdline,gflag);
     if(s!=Status::succeed){
         return (int)s;
     }
@@ -715,7 +812,7 @@ int netclient_str(const char* str){
         print_with_flag(gflag,arg...,"\n");
     };
     if(cmdline.expect("help",is_c_id_usable)){
-        show_cmdline_help(println,procname+" <option> <method>");
+        show_cmdline_help(println,procname+" [<option>] <method>");
         return 0;
     }
     else if(cmdline.expect("flag",is_c_id_usable)){

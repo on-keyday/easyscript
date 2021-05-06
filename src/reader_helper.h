@@ -643,7 +643,18 @@ namespace PROJECT_NAME{
             }
             if(!self->expect("@"))return true;
         }
-        if(!self->readwhile(ctx.host,untilincondition,is_url_host_usable<Char>,true))return true;
+        if(self->expect("[")){
+            ctx.host.push_back('[');
+            if(!self->readwhile(ctx.host,untilincondition,[](Char c){
+                return c==(Char)':'||is_hex(c);
+            },true))return false;
+            if(ctx.host.size()<=1)return false;
+            if(!self->expect("]"))return false;
+            ctx.host.push_back(']');
+        }
+        else{
+            if(!self->readwhile(ctx.host,untilincondition,is_url_host_usable<Char>,true))return true;
+        }
         if(self->expect(":")){
             if(!self->readwhile(ctx.port,untilincondition,+[](Char c){return is_digit(c);},true))return true;
             //if(!self->ahead("/"))return true;

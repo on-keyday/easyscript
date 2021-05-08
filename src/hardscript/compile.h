@@ -5,7 +5,7 @@
 */
 
 #pragma once
-#include"../reader.h"
+#include"../commonlib/reader.h"
 #include"control.h"
 #include<map>
 

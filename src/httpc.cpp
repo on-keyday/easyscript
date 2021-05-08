@@ -1,5 +1,5 @@
-#include"sockinterpreter.h"
-#include"socket.h"
+#include"httpc/sockinterpreter.h"
+#include"httpc/socket.h"
 #include<iostream>
 
 int main(int argc,char** argv){
@@ -9,7 +9,7 @@ int main(int argc,char** argv){
         return -1;
     }
     SSL_load_error_strings();
-    auto ret=netclient_argv(argc,argv);
+    auto ret=netclient_str(GetCommandLineA());
     WSACleanup();
     return ret;
 }

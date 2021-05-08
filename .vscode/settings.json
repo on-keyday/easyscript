@@ -50,6 +50,7 @@
         "chrono": "cpp",
         "ratio": "cpp",
         "cfenv": "cpp",
-        "*.rh": "cpp"
+        "*.rh": "cpp",
+        "deque": "cpp"
     }
 }

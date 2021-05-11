@@ -113,7 +113,7 @@ bool SecureSocket::open_if_differnet(const char* hostname,const char* service,in
     return true;
 }
 
-bool SecureSocket::init(){
+bool SecureSocket::init(char* alpnstr,int len){
 #if USE_SSL
     if (!ctx) {
 		ctx = SSL_CTX_new(TLS_method());
@@ -129,11 +129,11 @@ bool SecureSocket::init(){
     return false;
 }
 
-bool SecureSocket::connect(unsigned short port,bool nodelay){
+bool SecureSocket::connect(unsigned short port,bool nodelay,char* alpnstr,int len){
     if(sock.get_service()=="http")return sock.connect(port,nodelay);
 #if USE_SSL
     if(isconnected())return true;
-    if(!init())return false;
+    if(!init(alpnstr,len))return false;
     if(!sock.connect(port,nodelay))return false;
     ssl=SSL_new(ctx);
     if (!ssl)return false;

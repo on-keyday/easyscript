@@ -102,11 +102,11 @@ namespace PROJECT_NAME{
         int (*verifycb)(int, void*)=nullptr;
 #endif
         bool failed(int res=0);
-        bool init(char* alpnstr,int len);
+        bool init(const unsigned char* alpnstr,int len);
     public:
         bool open(const char* hostname,const char* service,int family=0,int type=0);
         bool open_if_differnet(const char* hostname,const char* service,int family=0,int type=0);
-        bool connect(unsigned short port=0,bool nodelay=false,char* alpnstr="\x8http/1.1",int len=9);
+        bool connect(unsigned short port=0,bool nodelay=false,const char* alpnstr="\x8http/1.1",int len=9);
         template<class Buf>
         bool send(Buf& buf){
             if(sock.get_service()=="http")return sock.send(buf);
@@ -133,6 +133,7 @@ namespace PROJECT_NAME{
 					auto reason = SSL_get_error(ssl, 0);
 					switch (reason)
 					{
+                    //case(SSL_ERROR_NONE):
 					case(SSL_ERROR_WANT_READ):
 					case(SSL_ERROR_WANT_WRITE):
 						retry = true;

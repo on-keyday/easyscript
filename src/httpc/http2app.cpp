@@ -9,28 +9,29 @@ bool HTTP2AppLayer::sendable(HTTP2Status status){
            status==HTTP2Status::half_closed_remote;
 }
 
-bool HTTP2AppLayer::stream_callback(bool on_recv,char* data,int size,H2FType type,
+bool HTTP2AppLayer::stream_callback(bool on_recv,const char* data,int size,H2FType type,
                                     H2Flag flag,HTTP2StreamContext* stream,void* user){
     HTTP2AppLayer* app=(HTTP2AppLayer*)user;
     HTTP2AppContext ctx(app);
     if(on_recv){
         if(!app->on_recv)return true;
-        ctx.set_settings(true,nullptr,0,NONEF,type,stream);
+        ctx.set_settings(true,data,size,NONEF,type,stream);
         ctx.change_permission(app,false);
         app->on_recv(ctx,user);
     }
     else{
-        if(!app->on_send)return false;
+        if(!app->on_send)return true;
         ctx.set_settings(true,data,size,flag,type,stream);
         ctx.change_permission(app,false);
-        app->on_send(ctx,user);
+        auto ret=app->on_send(ctx,user);
+        if(type==PING)return ret;
     }
     return true;
 }
 
 bool HTTP2AppLayer::send_connection_preface(){
     return streams.send("PRI * HTTP/2.0\r\nSM\r\n\r\n")&&
-           streams.send_frame(SETTINGS,NONEF,0,nullptr,0);
+    streams.send_frame(SETTINGS,NONEF,0,nullptr,0);
 }
 
 bool HTTP2AppLayer::parseurl(const std::string& url,URLContext<std::string>& urlctx,unsigned short& port){
@@ -75,7 +76,7 @@ bool HTTP2AppLayer::connection_negotiate(URLContext<std::string>& urlctx,unsigne
         sock.close();
         return false;
     }
-    unsigned char* st;
+    const unsigned char* st;
     unsigned int len=0;
     SSL_get0_alpn_selected(ssl,&st,&len);
     if(len==0||memcmp(st,"h2",2)!=0){
@@ -85,7 +86,13 @@ bool HTTP2AppLayer::connection_negotiate(URLContext<std::string>& urlctx,unsigne
     return true;
 }
 
-bool HTTP2AppLayer::start(const std::string& url,void* user,OnCallback app,OnCallback recv,OnCallback send=nullptr){
+bool HTTP2AppLayer::register_settings(const std::string& cafile){
+    auto& sock=streams.get_socket();
+    sock.set_cacert(cafile);
+    return true; 
+}
+
+bool HTTP2AppLayer::client(const std::string& url,void* user,OnCallback app,OnCallback recv,OnCallback send){
     if(!app||!recv)return false;
     on_app=app;
     on_recv=recv;
@@ -95,14 +102,31 @@ bool HTTP2AppLayer::start(const std::string& url,void* user,OnCallback app,OnCal
     if(!parseurl(url,urlctx,port)){
         return false;
     }
+    Reader<std::string> reader;
+    HTTP2AppContext appctx(this);
+    appctx.set_settings(false,nullptr,0,NONEF,UNKNOWN,nullptr);
+    appctx.change_permission(this,false);
+    streams.register_cb(stream_callback,this);
     if(!connection_negotiate(urlctx,port)){
         return false;
     }
-    if(!send_connection_preface())return false;
-    Reader<std::string> reader;
-    HTTP2AppContext appctx(this);
-    while(streams.do_a_proc(reader,stream_callback,this)){
+    if(!send_connection_preface())
+        return false;
+    bool initial=true;
+    in_member=true;
+    while(true){
+        if(!streams.do_a_proc(reader,initial))
+            break;
+        initial=false;
         app(appctx,user);
     }
+    in_member=false;
+    streams.get_socket().close();
     return true;
+}
+
+HTTP2StreamLayer* HTTP2AppLayer::get_streams(HTTP2AppContext* v){
+    if(!v||!in_member)return nullptr;
+    if(!v->verify(this))return nullptr;
+    return &streams;
 }

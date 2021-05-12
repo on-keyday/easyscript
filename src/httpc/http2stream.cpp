@@ -58,7 +58,8 @@ bool HTTP2StreamLayer::parse_data(){
 
 bool HTTP2StreamLayer::parse_header(){
     auto& ref=manager.frame();
-    auto& stream=manager.stream(ref.id);
+    auto id=ref.id;
+    auto& stream=manager.stream(id);
     Reader<std::string> reader(ref.buf);
     auto headersize=ref.len;
     unsigned char padded=0;
@@ -90,7 +91,7 @@ bool HTTP2StreamLayer::parse_header(){
     }
     manager.pop(true);
     if(continues){
-        return read_continution(stream)&&invoke_callback(HEADER,&stream);
+        return read_continution(stream,id)&&invoke_callback(HEADER,&stream);
     }
     return invoke_callback(HEADER,&stream);
 }
@@ -138,6 +139,7 @@ bool HTTP2StreamLayer::parse_settings(){
             return false;
         }
         manager.pop(true);
+        invoke_callback(SETTINGS,nullptr,ACK);
         return true;
     }
     if(ref.len%6){
@@ -160,13 +162,17 @@ bool HTTP2StreamLayer::parse_settings(){
                 else{
                     manager.send_error(HTTP2_PROTOCOL_ERROR);
                 }
+                return false;
             }
-            return false;
+            if(key==MAX_FRAME_SIZE){
+                manager.set_maxframesize(value);
+            }
         }
         settings[key]=value;
     }
     manager.pop(true);
-    return manager.send_frame(SETTINGS,ACK,0,nullptr,0)&&invoke_callback(SETTINGS,nullptr);
+    invoke_callback(SETTINGS,nullptr);
+    return manager.send_frame(SETTINGS,ACK,0,nullptr,0);
 }
 
 bool HTTP2StreamLayer::parse_push_promise(){
@@ -193,6 +199,10 @@ bool HTTP2StreamLayer::parse_push_promise(){
         manager.send_error(HTTP2_INTERNAL_ERROR);
         return false;
     }
+    if(id<=0){
+        manager.send_error(HTTP2_PROTOCOL_ERROR);
+        return false;
+    }
     ofs+=4;
     headersize-=4;
     if(headersize<=padded){
@@ -207,7 +217,7 @@ bool HTTP2StreamLayer::parse_push_promise(){
     promised.status=HTTP2Status::reserved_remote;
     promised.headerbuf.append(&ref.buf.c_str()[ofs],headersize);
     if(ref.flag&END_HEADERS)return true;
-    return read_continution(promised)&&invoke_callback(PUSH_PROMISE,&promised);
+    return read_continution(promised,id)&&invoke_callback(PUSH_PROMISE,&promised);
 }
 
 bool HTTP2StreamLayer::parse_goaway(){
@@ -222,7 +232,12 @@ bool HTTP2StreamLayer::parse_goaway(){
     if(ref.buf.size()<8)return true;
     std::string debuginfo;
     debuginfo.append(&ref.buf.c_str()[8],ref.buf.size()-8);
-    return invoke_callback(GOAWAY,nullptr);
+    manager.pop(!errorcode);
+    if(errorcode){
+        manager.error()=errorcode;
+    }
+    invoke_callback(GOAWAY,nullptr,NONEF,debuginfo.data(),debuginfo.size());
+    return errorcode!=0;
 }
 
 bool HTTP2StreamLayer::parse_window_update(){
@@ -244,6 +259,7 @@ bool HTTP2StreamLayer::parse_window_update(){
             return false;
         }
         framesize+=update;
+        manager.pop(true);
         return invoke_callback(WINDOW_UPDATE,nullptr);
     }
     else{
@@ -253,6 +269,7 @@ bool HTTP2StreamLayer::parse_window_update(){
             return false;
         }
         stream.framesize+=update;
+        manager.pop(true);
         return invoke_callback(WINDOW_UPDATE,&stream);
     }
 }
@@ -273,11 +290,11 @@ bool HTTP2StreamLayer::read_dependency(Reader<std::string>& reader,HTTP2StreamCo
 }
 
 
-bool HTTP2StreamLayer::read_continution(HTTP2StreamContext& stream){
+bool HTTP2StreamLayer::read_continution(HTTP2StreamContext& stream,int id){
     bool ok=false;
     while(manager.size()){
         auto& ref2=manager.frame();
-        if(ref2.type!=CONTINUATION||ref2.id!=stream.id){
+        if(ref2.type!=CONTINUATION||ref2.id!=id){
             manager.send_error(HTTP2_PROTOCOL_ERROR);
             return false;
         }

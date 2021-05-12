@@ -68,28 +68,26 @@ namespace PROJECT_NAME{
         std::chrono::system_clock::time_point updated_at;
     };
 
+
     struct HTTP2FrameLayer{
         using FrameCallback=bool(*)(H2FType type,H2Flag flag,int id,char* data,int size,void*);
     private:
         SecureSocket sock;
         std::deque<HTTP2Frame<std::string>> frames;
         int last_succeed=0;
-        bool on_error=false;
+        unsigned int on_error=0;
         FrameCallback callback=nullptr;
         void* user=nullptr;
     public:
-        bool error(){return on_error;}
-        bool send(const std::string& buf){return sock.send(buf);}
+        unsigned int& error(){return on_error;}
+        bool send(const std::string& buf);
         bool send_frame(H2FType type,H2Flag flag,int id,char* data,int size);
         bool select_recv(std::string& buf);
         bool read_a_frame(Reader<std::string>& reader,int framesize);
         bool read_set_of_frames(Reader<std::string>& reader,int framesize);
         bool pop(bool succeed);
-        bool send_ping(bool back=false);
+        bool reverse_ping();
         bool send_error(unsigned int errorcode,const char* additional=nullptr,size_t size=0);
-        //bool send_error_and_pop(unsigned int errorcode,const char* additional=nullptr,size_t size=0);
-        //bool send_settings_ack();
-        //bool send_rst(int id,unsigned int errorcode);
         HTTP2Frame<std::string>& current(){return frames.front();}
         size_t size(){return frames.size();}
         void register_cb(FrameCallback cb,void* user){
@@ -106,6 +104,7 @@ namespace PROJECT_NAME{
         std::map<int,HTTP2StreamContext> streams;
         long long delta=20;
         int maxid=0;
+        int max_framesize=65535;
         bool on_allow_delta(int id){
             auto diff=std::chrono::system_clock::now()-stream(id).updated_at;
             return std::chrono::duration_cast<std::chrono::microseconds>(diff).count()<delta;
@@ -114,6 +113,7 @@ namespace PROJECT_NAME{
         bool change_flow_recv(int id,HTTP2Status& st,H2FType type,H2Flag flag);
         bool change_flow_send(HTTP2Status& st,H2FType type,H2Flag flag);
 
+        int verify_promise(char* data,H2Flag flag);
     public:
         bool send_frame(H2FType type,H2Flag flag,int id,char* data,int size);
         bool recv_frame(Reader<std::string>& reader,int framesize);
@@ -126,15 +126,18 @@ namespace PROJECT_NAME{
         }
         bool pop(bool succeed){return frames.pop(succeed);}
         size_t size(){return frames.size();}
-        unsigned int error(){return frames.error();}
+        unsigned int& error(){return frames.error();}
         void register_cb(HTTP2FrameLayer::FrameCallback cb,void* user){
             frames.register_cb(cb,user);
         }
         SecureSocket& get_socket(){return frames.get_socket();}
+        void set_maxframesize(int size){
+            max_framesize=size;
+        }
     };
 
     struct HTTP2StreamLayer{
-        using StreamCallback=bool(*)(bool,char*,int,H2FType,H2Flag,HTTP2StreamContext*,void*);
+        using StreamCallback=bool(*)(bool,const char*,int,H2FType,H2Flag,HTTP2StreamContext*,void*);
     private:
         HTTP2FlowControlLayer manager;
         std::map<unsigned short,unsigned int> settings;
@@ -150,7 +153,7 @@ namespace PROJECT_NAME{
         bool parse_goaway();
         bool parse_window_update();
         bool read_dependency(Reader<std::string>& reader,HTTP2StreamContext& stream);
-        bool read_continution(HTTP2StreamContext& stream);
+        bool read_continution(HTTP2StreamContext& stream,int id);
 
 
         bool verify_settings_value(unsigned short key,unsigned int value);
@@ -158,7 +161,7 @@ namespace PROJECT_NAME{
 
         StreamCallback callback=nullptr;
         void* user=nullptr;
-        bool invoke_callback(H2FType type,HTTP2StreamContext* stream);
+        bool invoke_callback(H2FType type,HTTP2StreamContext* stream,H2Flag flag=NONEF,const char* data=nullptr,size_t datasize=0);
         static bool frame_callback(H2FType type,H2Flag flag,int id,char* data,int size,void* user);
     public:
         HTTP2StreamLayer();
@@ -168,16 +171,24 @@ namespace PROJECT_NAME{
         }
         bool send(const std::string& buf){return manager.send(buf);}
         bool send_frame(H2FType type,H2Flag flag,int id,char* data,int size){
+            if(size<0||size>settings[MAX_FRAME_SIZE])return false;
             return manager.send_frame(type,flag,id,data,size);
         }
         
-        bool do_a_proc(Reader<std::string>& reader,StreamCallback cb,void* user);
+        bool send_settings();
 
+        bool do_a_proc(Reader<std::string>& reader,bool initial);
+
+        void register_cb(StreamCallback cb,void* user){callback=cb;this->user=user;}
         SecureSocket& get_socket(){return manager.get_socket();}
+        std::map<unsigned short,unsigned int>& get_settings(){return settings;}
     };
+
+    struct HTTP2AppContext;
 
     struct HTTP2AppLayer{
     private:
+        bool in_member=false;
         void* user=nullptr;
         HTTP2StreamLayer streams;
         using OnCallback=bool(*)(HTTP2AppContext& ctx,void* user);
@@ -185,21 +196,22 @@ namespace PROJECT_NAME{
         OnCallback on_send=nullptr;
         OnCallback on_recv=nullptr;
         OnCallback on_app=nullptr;
-        static bool stream_callback(bool on_recv,char* data,int size,H2FType type,H2Flag flag,HTTP2StreamContext* stream,void* user);
+        static bool stream_callback(bool on_recv,const char* data,int size,H2FType type,H2Flag flag,HTTP2StreamContext* stream,void* user);
         bool send_connection_preface();
         bool sendable(HTTP2Status status);
         bool parseurl(const std::string& url,URLContext<std::string>& ctx,unsigned short& port);
         bool connection_negotiate(URLContext<std::string>& ctx,unsigned short port);
     public:
-        bool start(const std::string& url,void* user,OnCallback app,OnCallback recv,OnCallback onsend=nullptr);
-
+        bool register_settings(const std::string& cafile);
+        bool client(const std::string& url,void* user,OnCallback app,OnCallback recv,OnCallback onsend=nullptr);
+        HTTP2StreamLayer* get_streams(HTTP2AppContext* v);
     };
 
     struct HTTP2AppContext{
     private:
         HTTP2AppLayer* self=nullptr;
         HTTP2StreamContext* stream=nullptr;
-        std::string data=nullptr;
+        std::string data;
         H2Flag flag=NONEF;
         H2FType frame=UNKNOWN;
         bool no_change=true;
@@ -220,10 +232,23 @@ namespace PROJECT_NAME{
             return true;
         }
 
-        bool change_permission(HTTP2AppLayer* verify,bool mode){
-            if(self!=verify)return false;
+        bool change_permission(HTTP2AppLayer* v,bool mode){
+            if(!verify(v))return false;
             master=mode;
             return true;
         }
+
+        bool verify(HTTP2AppLayer* v){return v==self;}
+
+        H2FType get_frametype(){return frame;}
+
+        H2Flag get_frameflag(){return flag;}
+
+        std::string& get_data(){return data;}
+
+        bool send_frame(H2FType type,H2Flag flag,int id,char* data,int size);
+        
+        int send_header(const std::string& data,unsigned char padding=0);
+        int send_data(const std::string& data,unsigned char padding=0);
     };
 }

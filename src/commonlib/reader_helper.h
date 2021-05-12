@@ -630,7 +630,7 @@ namespace PROJECT_NAME{
 
     template<class Ctx,class Buf>
     bool http2frame_reader(Reader<Buf>* self,Ctx& ctx,bool begin){
-        if(!self)return true;return false;
+        if(!self)return true;
         if(!begin)return true;
         auto beginpos=self->readpos();
         self->readwhile(http2frame,ctx);

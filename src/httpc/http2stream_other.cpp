@@ -13,22 +13,41 @@ bool HTTP2StreamLayer::send_rst_and_pop(int id,unsigned int errorcode){
     return send_rst(id,errorcode)&&manager.pop(!errorcode);
 }
 
-bool HTTP2StreamLayer::invoke_callback(H2FType type,HTTP2StreamContext* stream){
-    if(!callback)return true;
-    return callback(true,nullptr,0,type,NONEF,stream,user);
+bool HTTP2StreamLayer::send_settings(){
+    std::string framedata;
+    for(auto& setting:settings){
+        unsigned short key=setting.first;
+        unsigned int value=setting.second;
+        auto keyp=(char*)&key,valp=(char*)&value;
+        key=translate_byte_net_and_host<unsigned short>(keyp);
+        value=translate_byte_net_and_host<unsigned int>(valp);
+        framedata.append(keyp,2);
+        framedata.append(valp,4);
+    }
+    return send_frame(SETTINGS,NONEF,0,framedata.data(),framedata.size());
 }
 
-bool HTTP2StreamLayer::do_a_proc(Reader<std::string>& reader,StreamCallback cb,void* user){
-    callback=cb;
-    this->user=user;
-    manager.register_cb(frame_callback,this);
+bool HTTP2StreamLayer::invoke_callback(H2FType type,HTTP2StreamContext* stream,H2Flag flag,const char* data,size_t datasize){
+    if(!callback)return true;
+    return callback(true,data,datasize,type,flag,stream,user);
+}
+
+bool HTTP2StreamLayer::do_a_proc(Reader<std::string>& reader,bool initial){
+    //manager.register_cb(frame_callback,this);
     if(!manager.recv_frame(reader,settings[MAX_FRAME_SIZE])){
-        if(!manager.error()){
+        if(manager.error()!=0){
             manager.send_error(HTTP2_INTERNAL_ERROR);
         }
         return false;
     }
+    bool ok=false;
     while(manager.size()){
+        if(initial){
+            if(manager.frame().type!=SETTINGS){
+                manager.send_error(HTTP2_PROTOCOL_ERROR);
+                return false;
+            }
+        }
         if(!parse_frame()){
             if(!manager.error()){
                 manager.send_error(HTTP2_INTERNAL_ERROR);
@@ -62,9 +81,10 @@ bool HTTP2StreamLayer::verify_settings_value(unsigned short key,unsigned int val
 HTTP2StreamLayer::HTTP2StreamLayer(){
     settings[HEADER_TABLE_SIZE]=4096;
     settings[ENABLE_PUSH]=1;
-    settings[MAX_CONCURRENT_STREAMS]=~0;
+    settings[MAX_CONCURRENT_STREAMS]=100;
     settings[INITIAL_WINDOW_SIZE]=0xffff;
     settings[MAX_FRAME_SIZE]=16384;
     settings[MAX_HEADER_LIST_SIZE]=~0;
+    manager.register_cb(frame_callback,this);
 }
 

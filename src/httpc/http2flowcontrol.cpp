@@ -8,12 +8,12 @@ bool HTTP2FlowControlLayer::change_flow(bool recv,int id,H2FType type,H2Flag fla
         if(recv)frames.send_error(HTTP2_PROTOCOL_ERROR);
         return false;
     }
-    if((type==GOAWAY||type==SETTINGS)&&id!=0){
+    if((type==GOAWAY||type==SETTINGS||type==PING)&&id!=0){
         if(recv)frames.send_error(HTTP2_PROTOCOL_ERROR);
         return false;
     }
     if(id==0){
-        if(type!=WINDOW_UPDATE){
+        if(type!=WINDOW_UPDATE&&type!=GOAWAY&&type!=SETTINGS&&type!=PING){
             if(recv)frames.send_error(HTTP2_PROTOCOL_ERROR);
             return false;
         }
@@ -102,13 +102,42 @@ bool HTTP2FlowControlLayer::change_flow_send(HTTP2Status& st,H2FType type,H2Flag
     return true;
 }
 
+int HTTP2FlowControlLayer::verify_promise(char* data,H2Flag flag){
+    if(!data)return 0;
+    int ofs=0;
+    if(flag&PADDED){
+        ofs=1;
+    }
+    auto primise_id=translate_byte_net_and_host<int>(&data[ofs]);
+    if(primise_id<=0)return 0;
+    auto& ref=stream(primise_id);
+    if(ref.status!=HTTP2Status::idle)return 0;
+    return primise_id;
+}
+
 bool HTTP2FlowControlLayer::send_frame(H2FType type,H2Flag flag,int id,char* data,int size){
-    if(!change_flow(false,id,type,flag))return false;
+    int promise=0;
+    if(type==PUSH_PROMISE){
+        if(size<4)return false;
+        promise=verify_promise(data,flag);
+        if(!promise){
+            return false;
+        }
+    }
+    else if(type==DATA){
+        if(stream(id).framesize<0)return false;
+    }
+    if(!change_flow(false,id,type,flag))
+        return false;
+    if(type==PUSH_PROMISE){
+        stream(promise).status=HTTP2Status::reserved_local;
+    }
     return frames.send_frame(type,flag,id,data,size);
 }
 
 bool HTTP2FlowControlLayer::recv_frame(Reader<std::string>& reader,int framesize){
-    if(!frames.read_set_of_frames(reader,framesize))return false;
+    if(!frames.read_set_of_frames(reader,framesize))
+        return false;
     if(frames.size()){
         auto& ref=frames.current();
         return change_flow(true,ref.id,(H2FType)ref.type,(H2Flag)ref.flag);
@@ -118,7 +147,10 @@ bool HTTP2FlowControlLayer::recv_frame(Reader<std::string>& reader,int framesize
 
 HTTP2StreamContext& HTTP2FlowControlLayer::stream(int id){
     auto& ret=streams[id];
-    if(ret.status==HTTP2Status::idle&&id<maxid)ret.status=HTTP2Status::closed;
+    if(ret.status==HTTP2Status::idle){
+        ret.framesize=max_framesize;
+        if(id<maxid)ret.status=HTTP2Status::closed;
+    }
     return ret;
 }
 

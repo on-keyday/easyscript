@@ -113,14 +113,14 @@ bool SecureSocket::open_if_differnet(const char* hostname,const char* service,in
     return true;
 }
 
-bool SecureSocket::init(char* alpnstr,int len){
+bool SecureSocket::init(const unsigned char* alpnstr,int len){
 #if USE_SSL
     if (!ctx) {
 		ctx = SSL_CTX_new(TLS_method());
 		if (!ctx)return false;
 		SSL_CTX_set_options(ctx, SSL_OP_NO_SSLv2);
-		unsigned char proto[] = "\x8http/1.1";
-		SSL_CTX_set_alpn_protos(ctx, proto, 9);
+		//unsigned char proto[] = "\x8http/1.1";
+		SSL_CTX_set_alpn_protos(ctx, alpnstr, len);
 		SSL_CTX_set_verify(ctx, SSL_VERIFY_PEER, (int(*)(int, X509_STORE_CTX *))verifycb);
 		SSL_CTX_set_info_callback(ctx,(void(*)(const SSL*,int,int))infocb);
 	}
@@ -129,11 +129,11 @@ bool SecureSocket::init(char* alpnstr,int len){
     return false;
 }
 
-bool SecureSocket::connect(unsigned short port,bool nodelay,char* alpnstr,int len){
+bool SecureSocket::connect(unsigned short port,bool nodelay,const char* alpnstr,int len){
     if(sock.get_service()=="http")return sock.connect(port,nodelay);
 #if USE_SSL
     if(isconnected())return true;
-    if(!init(alpnstr,len))return false;
+    if(!init((const unsigned char*)alpnstr,len))return false;
     if(!sock.connect(port,nodelay))return false;
     ssl=SSL_new(ctx);
     if (!ssl)return false;

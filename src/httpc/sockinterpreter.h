@@ -22,6 +22,8 @@ extern"C"{
     DLL_EXPORT int STDCALL netclient_str(const char* str);
 
     DLL_EXPORT int STDCALL netclient_argv(int argc,char** argv);
+
+    DLL_EXPORT int STDCALL http2_test();
 #ifdef __cplusplus
 }
 #endif

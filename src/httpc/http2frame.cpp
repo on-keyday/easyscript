@@ -1,12 +1,20 @@
 #include"http2.h"
 using namespace PROJECT_NAME;
+#include<fstream>
+
+std::ofstream data("./sent.h2f",std::ios::binary);
+
+bool HTTP2FrameLayer::send(const std::string& buf){
+    data<< ":sep:" <<buf;
+    return sock.send(buf);
+}
 
 bool HTTP2FrameLayer::send_frame(H2FType type,H2Flag flag,int id,char* data,int size){
     if(id<0)return false;
     if(size<0||size>0xffffff)return false;
     if(size&&!data)return false;
-    size<<=8;
     int len=size,ids=id;
+    len<<=8;
     auto sizep=(char*)&len,idp=(char*)&ids;
     len=translate_byte_net_and_host<int>(sizep);
     ids=translate_byte_net_and_host<int>(idp);
@@ -16,12 +24,13 @@ bool HTTP2FrameLayer::send_frame(H2FType type,H2Flag flag,int id,char* data,int 
     frame.push_back(flag);
     frame.append(idp,4);
     if(size)frame.append(data,size);
-    if(callback)callback(type,flag,id,data,size,user);
+    if(callback)
+        callback(type,flag,id,data,size,user);
     return send(frame);
 }
 
 bool HTTP2FrameLayer::select_recv(std::string& buf){
-    auto sock_base=sock.get_basesock().getsocket();
+    /*auto sock_base=sock.get_basesock().getsocket();
     if(sock_base==~0)return false;
     timeval timeout;
     timeout.tv_sec=10;
@@ -30,18 +39,19 @@ bool HTTP2FrameLayer::select_recv(std::string& buf){
     FD_SET(sock_base,&set);
     ::select(sock_base+1,&set,nullptr,nullptr,&timeout);
     if(FD_ISSET(sock_base,&set)){
-        sock.recv(buf);
+        return sock.recv(buf);
     }
     else{
         return false;
-    }
-    return true;
+    }*/
+    return sock.recv(buf);
 }
 
 bool HTTP2FrameLayer::read_a_frame(Reader<std::string>& reader,int framesize){
     HTTP2Frame<std::string> frame;
     frame.maxlen=framesize;
-    if(!select_recv(reader.ref()))return false;
+    if(!select_recv(reader.ref()))
+        return false;
     while(true){
         reader.readwhile(http2frame_reader,frame);
         if(frame.continues){
@@ -54,7 +64,9 @@ bool HTTP2FrameLayer::read_a_frame(Reader<std::string>& reader,int framesize){
         if(frame.len>frame.maxlen){
             send_error(HTTP2_FLOW_CONTROL_ERROR);
         }
-        send_error(HTTP2_PROTOCOL_ERROR);
+        else{
+            send_error(HTTP2_PROTOCOL_ERROR);
+        }
         return false;
     }
     frames.push_back(std::move(frame));
@@ -79,7 +91,7 @@ bool HTTP2FrameLayer::read_set_of_frames(Reader<std::string>& reader,int framesi
         }
     }
     else if(frames.back().type==PING){
-        send_ping(true);
+        reverse_ping();
         frames.pop_back();
     }
     return true;
@@ -97,19 +109,16 @@ bool HTTP2FrameLayer::pop(bool succeed){
     return true;
 }
 
-bool HTTP2FrameLayer::send_ping(bool back){
-    if(back){
-        auto& ref=frames.back();
-        if(ref.id!=0){
-            send_error(HTTP2_PROTOCOL_ERROR);
-            return false;
-        }
-        if(ref.flag&ACK){
-            return true;   
-        }
-        return send_frame(PING,ACK,0,ref.buf.data(),8);
+bool HTTP2FrameLayer::reverse_ping(){
+    auto& ref=frames.back();
+    if(ref.id!=0){
+        send_error(HTTP2_PROTOCOL_ERROR);
+        return false;
     }
-    return false;
+    if(ref.flag&ACK){
+        return callback(PING,NONEF,0,ref.buf.data(),8,user);
+    }
+    return send_frame(PING,ACK,0,ref.buf.data(),8);
 }
 
 bool HTTP2FrameLayer::send_error(unsigned int errorcode,const char* additional,size_t size){
@@ -125,7 +134,7 @@ bool HTTP2FrameLayer::send_error(unsigned int errorcode,const char* additional,s
         payloadbuf.append(additional,size);
     }
     if(payloadbuf.size()>0xffffff)return false;
-    on_error=errorcode!=0;
+    on_error=errorcode=0;
     return send_frame(GOAWAY,NONEF,0,payloadbuf.data(),(int)payloadbuf.size());
 }
 

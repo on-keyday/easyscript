@@ -60,8 +60,8 @@ namespace PROJECT_NAME{
                 ret=parse_arg(nullptr,self,"{}","}");
                 if(!ret)return nullptr;
             }
-            else if(self->expect("$")&&self->ahead("(")){
-                
+            else if(self->expect("$",[](char c){return c!='['&&c!='(';})){
+                ret=parse_closure(self);
                 if(!ret)return nullptr;
             }
             else if(self->ahead("\"")||self->ahead("'")){
@@ -203,15 +203,21 @@ namespace PROJECT_NAME{
 
         Tree* parse_closure(Reader<Buf>* self){
             BasicBlock<Buf> block(false,false,true);
+            bool needless=false;
             Buf closure="$";
             if(self->expect("[")){
                 closure+="[";
                 self->readwhile(closure,until,']');
+                if(!self->expect("]"))return nullptr;
                 closure+="]";
+                needless=true;
             }
-            if(!self->readwhile(closure,depthblock_withbuf,block))
-                return nullptr;
-            closure+=")";
+            if(!needless||self->ahead("(")){
+                closure+="(";
+                if(!self->readwhile(closure,depthblock_withbuf,block))
+                    return nullptr;
+                closure+=")";
+            }
             if(self->expect("->")){
                 closure+="->";
                 self->readwhile(closure,until,'{');

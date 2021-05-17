@@ -42,7 +42,7 @@ R"(
 
     call();*/
 
-    $(i,e)->void{print(i,e);};
+    $[&]->void{print(a);};
 )";
     Reader<std::string> test(code,ignore_c_comments);
     std::vector<Control> globalvec;

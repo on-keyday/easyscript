@@ -322,7 +322,9 @@ bool HTTPClient::method_if_exist(const char* method,const char* url,const char* 
         auto b=tolower((unsigned char)c2);
         return a==b;
     };
-    auto check=[&reader,&cmp](const char* m){return reader.expect(m,nullptr,cmp);};
+    auto check=[&reader,&cmp](const char* m){
+        return reader.expect(m,nullptr,cmp);
+    };
     if(check("GET")){
         return get(url);
     }

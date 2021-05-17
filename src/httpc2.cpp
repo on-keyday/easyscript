@@ -35,7 +35,7 @@ void print_Frame(H2FType type){
 }
 
 bool OnRecv(HTTP2AppContext& ctx,void* user){
-    std::cout << "recv>";
+    std::cout << "recv" << "(" << ctx.get_stream_id() << ")>";
     print_Frame(ctx.get_frametype());
     if(ctx.get_frametype()==GOAWAY){
         auto& data=ctx.get_data();
@@ -51,6 +51,20 @@ bool OnRecv(HTTP2AppContext& ctx,void* user){
 bool OnApp(HTTP2AppContext& ctx,void* user){
     bool* flag=(bool*)user;
     if(*flag){
+        char header[]={
+        0x00,                                                   // 圧縮情報
+        0x07, 0x3a, 0x6d, 0x65, 0x74, 0x68, 0x6f, 0x64,         // 7 :method
+        0x03, 0x47, 0x45, 0x54,                                 // 3 GET
+        0x00,                                                   // 圧縮情報
+        0x05, 0x3a, 0x70, 0x61, 0x74, 0x68,                     // 5 :path
+        0x01, 0x2f,                                             // 1 /
+        0x00,                                                   // 圧縮情報
+        0x07, 0x3a, 0x73, 0x63, 0x68, 0x65, 0x6d, 0x65,         // 7 :scheme
+        0x05, 0x68, 0x74, 0x74, 0x70, 0x73,                     // 5 https
+        0x00,                                                   // 圧縮情報
+        0x0a, 0x3a, 0x61, 0x75, 0x74, 0x68, 0x6f, 0x72, 0x69, 0x74, 0x79,           // 10 :authority
+        0x0b, 0x6e, 0x67, 0x68, 0x74, 0x74, 0x70, 0x32, 0x2e, 0x6f, 0x72, 0x67 };
+        ctx.send_frame(HEADER,END_STREAM,3,header,sizeof(header));
         //ctx.send_frame(PING,NONEF,0,"testdata",8);
         *flag=false;
     }
@@ -75,13 +89,13 @@ bool OnSend(HTTP2AppContext& ctx,void* user){
     return true;
 }
 
-#include"samplecode.cpp"
+//#include"samplecode.cpp"
 
 int __stdcall http2_test(){
     HTTP2AppLayer app;
     app.register_settings("D:\\CommonLib\\netsoft\\cacert.pem");
     bool flag=true;
-    app.client("nghttp2.org",&flag,OnApp,OnRecv,OnSend);
-    sample_code(0,nullptr);
+    app.client("google.com",&flag,OnApp,OnRecv,OnSend);
+    //sample_code(0,nullptr);
     return true;
 }

@@ -6,7 +6,7 @@
 
 #pragma once
 #include"../commonlib/project_name.h"
-#include"../commonlib/reader_helper.h"
+#include"../commonlib/net_helper.h"
 #include<string>
 #include<map>
 #include<chrono>
@@ -92,6 +92,7 @@ namespace PROJECT_NAME{
     struct SecureSocket{
     private:
         ClientSocket sock;
+        int err=0;
 #if USE_SSL
         SSL_CTX* ctx=nullptr;
         SSL* ssl=nullptr;
@@ -138,6 +139,13 @@ namespace PROJECT_NAME{
 					case(SSL_ERROR_WANT_WRITE):
 						retry = true;
 						break;
+                    case(SSL_ERROR_SYSCALL):
+#ifdef _WIN32
+                        err=WSAGetLastError();
+#else
+                        err=errno;
+#endif
+                        break;
 					default:
 						break;
 					}

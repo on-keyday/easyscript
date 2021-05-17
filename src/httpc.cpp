@@ -11,7 +11,7 @@ int main(int argc,char** argv){
     SSL_load_error_strings();
     auto ret=netclient_str(GetCommandLineA());
 
-    http2_test();
+    //http2_test();
     WSACleanup();
     return ret;
 }

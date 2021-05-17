@@ -16,7 +16,8 @@ namespace control{
         boolean,
         integer,
         floats,
-        string
+        string, 
+        closure
     };
 
     struct Tree{
@@ -33,12 +34,60 @@ namespace control{
             }
         }
     };
+    
+    struct Flags{
+        bool mustexpect=false;
+        bool syntaxerr=false; 
+    };
+
+    template<class Buf>
+    bool checker(PROJECT_NAME::Reader<Buf>* self,const char*& expected,int depth,Flags& flag){
+        auto check=[&](auto... args){return PROJECT_NAME::op_expect(self,expected,args...);};
+        auto chone=[&](auto& arg){
+            return self->expectp(arg,expected,[&](auto c){return c==arg[0];});
+        };
+        switch (depth){
+        case 8:
+            if(flag.mustexpect){
+                if(check(":")){
+                    flag.mustexpect=false;
+                    return true;
+                }
+                flag.syntaxerr=true;
+                return false;
+            }
+            else if(check("?")){
+                flag.mustexpect=true;
+                return true;
+            }
+            return false;
+        case 7:
+            return check("=");
+        case 6:
+            return check("||");
+        case 5:
+            return check("&&");
+        case 4:
+            return check("==","!=");
+        case 3:
+            return check("<=",">=","<",">");
+        case 2:
+            return check("+","-")||chone("|")||chone("&")||chone("^");
+        case 1:
+            return check("*","/","%","<<",">>");
+        case 0:
+            return check("++","--","+","-","!","&","*");
+        default:
+            return false;
+        }
+    }
 
     template<class Buf>
     Tree* expr_parse(PROJECT_NAME::Reader<Buf>& reader){
-        PROJECT_NAME::ExampleTree<Tree,TreeKind,Buf> ctx;
+        PROJECT_NAME::ExampleTree<Tree,TreeKind,Buf,decltype(checker<Buf>),Flags> 
+        ctx(checker,8);
         reader.readwhile(PROJECT_NAME::read_expr,ctx);
-        if(!ctx.result||ctx.syntaxerr){
+        if(!ctx.result||ctx.flags.syntaxerr){
             delete ctx.result;
             return nullptr;
         }
@@ -69,6 +118,7 @@ namespace control{
     enum class CtrlKind{
         ctrl,
         func,
+        decl,
         var,
         expr
     };
@@ -126,19 +176,13 @@ namespace control{
 
     bool parse_expr(PROJECT_NAME::Reader<std::string>& reader,std::vector<Control>& vec,bool semicolon);
 
-    std::string parse_type(PROJECT_NAME::Reader<std::string>& reader,bool strict=false);
-
-    bool parse_funcarg(PROJECT_NAME::Reader<std::string>& reader,std::vector<std::string>& arg,std::vector<std::string>& type,std::string& ret,bool strict=false);
-
-    std::string typevec_to_type(std::vector<std::string>& type,std::string& ret);
-
     bool parse_var(PROJECT_NAME::Reader<std::string>& reader,std::vector<Control>& vec);
 
     bool parse_var_detail(PROJECT_NAME::Reader<std::string>& reader,std::vector<Control>& vec,bool bracket,bool initeq);
 
     bool parse_if(PROJECT_NAME::Reader<std::string>& reader,std::vector<Control>& vec);
 
-    bool parse_func(PROJECT_NAME::Reader<std::string>& reader,std::vector<Control>& vec);
+    bool parse_func(PROJECT_NAME::Reader<std::string>& reader,std::vector<Control>& vec,bool decl=false);
 
     bool parse_for(PROJECT_NAME::Reader<std::string>& reader,std::vector<Control>& vec);
 }

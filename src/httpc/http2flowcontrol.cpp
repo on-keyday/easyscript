@@ -148,6 +148,7 @@ bool HTTP2FlowControlLayer::recv_frame(Reader<std::string>& reader,int framesize
 HTTP2StreamContext& HTTP2FlowControlLayer::stream(int id){
     auto& ret=streams[id];
     if(ret.status==HTTP2Status::idle){
+        ret.id=id;
         ret.framesize=max_framesize;
         if(id<maxid)ret.status=HTTP2Status::closed;
     }

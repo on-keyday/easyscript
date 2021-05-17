@@ -246,9 +246,13 @@ namespace PROJECT_NAME{
 
         std::string& get_data(){return data;}
 
+        int get_stream_id(){if(!stream)return 0;return stream->id;}
+
         bool send_frame(H2FType type,H2Flag flag,int id,char* data,int size);
         
         int send_header(const std::string& data,unsigned char padding=0);
         int send_data(const std::string& data,unsigned char padding=0);
+
+
     };
 }

@@ -5,6 +5,7 @@
 */
 
 #include"control.h"
+#include"type_parse.h"
 
 using namespace PROJECT_NAME;
 using namespace control;
@@ -46,8 +47,8 @@ bool control::control_parse(Reader<std::string>& reader,std::vector<Control>& ve
     else if(reader.expect("select",is_c_id_usable)){
         return false;
     }
-    else if(reader.expect("continue",expected,is_c_id_usable)||
-            reader.expect("break",expected,is_c_id_usable)){
+    else if(reader.expectp("continue",expected,is_c_id_usable)||
+            reader.expectp("break",expected,is_c_id_usable)){
         Control ret;
         if(!reader.expect(";"))return false;
         ret.name=expected;
@@ -55,6 +56,9 @@ bool control::control_parse(Reader<std::string>& reader,std::vector<Control>& ve
     }
     else if(reader.expect("func",is_c_id_usable)){
         return parse_func(reader,vec);
+    }
+    else if(reader.expect("decl",is_c_id_usable)){
+        return parse_func(reader,vec,true);
     }
     else if(reader.expect("var",is_c_id_usable)){
         return parse_var(reader,vec);
@@ -95,126 +99,7 @@ bool control::parse_expr(PROJECT_NAME::Reader<std::string>& reader,std::vector<C
     return true;
 }
 
-std::string control::parse_type(PROJECT_NAME::Reader<std::string>& reader,bool strict){
-    std::string name;
-    auto result=[&](auto& add)->std::string{
-        return (name=parse_type(reader)).size()==0?"":add+name;
-    };
-    if(reader.expect("const",is_c_id_usable)){
-        return result("const ");
-    }
-    else if(reader.expect("*")){
-        return result("*");
-    }
-    else if(reader.expect("&")){
-        return result("&");
-    }
-    else if(reader.expect("[")){
-        if(!reader.readwhile(name,until,']')||!reader.expect("]")){
-            return "";
-        }
-        auto tmp="["+name+"]";
-        return result(tmp);
-    }
-    else if(reader.expect("(")){
-        std::vector<std::string> _,types;
-        std::string ret;
-        if(!parse_funcarg(reader,_,types,ret,strict)){
-            return "";
-        }
-        return typevec_to_type(types,ret);
-    }
-    else if(is_c_id_top_usable(reader.achar())){
-        reader.readwhile(name,untilincondition,is_c_id_usable<char>);
-        while(reader.expect(".")){
-            if(!is_c_id_top_usable(reader.achar()))return "";
-            std::string tmp;
-            reader.readwhile(tmp,untilincondition,is_c_id_usable<char>);
-            if(tmp=="")return "";
-            name+="."+tmp;
-        }
-        return name;
-    }
-    return "";
-}
 
-bool control::parse_funcarg(PROJECT_NAME::Reader<std::string>& reader,std::vector<std::string>& arg,std::vector<std::string>& type,std::string& ret,bool strict){
-    while(!reader.expect(")")){
-        std::string argname;
-        std::string typenames;
-        if(strict){
-            if(is_c_id_top_usable(reader.achar())){
-                auto beginpos=reader.readpos();
-                reader.readwhile(argname,untilincondition,is_c_id_usable<char>);
-                if(argname=="const"||reader.ahead(".")||reader.ahead(",")||reader.ahead(")")){
-                    reader.seek(beginpos);
-                    argname="";
-                }
-            }
-            typenames=parse_type(reader,strict);
-            if(typenames=="")return false;
-        }
-        else{
-            reader.readwhile(argname,untilincondition,is_c_id_usable<char>);
-            if(argname==""||argname=="const"||reader.ahead(".")){
-                return false;
-            }
-            if(!reader.ahead(",")&&!reader.ahead(")")){
-                typenames=parse_type(reader,strict);
-                if(typenames=="")return false;
-            }
-        }
-        if(argname!=""&&reader.expect("=")){
-            argname+="=";
-            auto beginpos=reader.readpos();
-            auto check=expr_parse(reader);
-            if(!check)return false;
-            delete check;
-            auto endpos=reader.readpos();
-            reader.seek(beginpos);
-            for(size_t i=0;i!=endpos;i++){
-                argname.push_back(reader.achar());
-                reader.increment();
-            }
-        }
-        arg.push_back(argname);
-        type.push_back(typenames);
-        if(!reader.expect(",")&&!reader.ahead(")")){
-            return false;
-        }
-    }
-    if(reader.expect("->")){
-        ret=parse_type(reader,strict);
-        if(ret=="")return false;
-    }
-    return true;
-}
-
-std::string control::typevec_to_type(std::vector<std::string>& types,std::string& ret){
-    bool first=true;
-    std::string name="(";
-    size_t num=0;
-    for(auto& s:types){
-        if(first){
-            first=false;
-        }
-        else{
-            name+=",";
-        }
-        if(s==""){
-            name+="@"+std::to_string(num);
-            num++;
-        }
-        else{
-            name+=s;
-        }
-    }
-    name+=")";
-    if(ret!=""){
-        name+="->"+ret;
-    }
-    return name;
-}
 
 bool control::parse_var(PROJECT_NAME::Reader<std::string>& reader,std::vector<Control>& vec){
     bool bracket=false;
@@ -313,19 +198,26 @@ bool control::parse_if(PROJECT_NAME::Reader<std::string>& reader,std::vector<Con
     return true;
 }
 
-bool control::parse_func(PROJECT_NAME::Reader<std::string>& reader,std::vector<Control>& vec){
+bool control::parse_func(PROJECT_NAME::Reader<std::string>& reader,std::vector<Control>& vec,bool decl){
     Control ret;
     if(!is_c_id_top_usable(reader.achar()))return false;
     reader.readwhile(ret.name,untilincondition,is_c_id_usable<char>);
     if(ret.name=="")return false;
     std::vector<std::string> arg,argtype;
     std::string rettype;
-    if(!reader.expect("(")||!parse_funcarg(reader,arg,argtype,rettype))return false;
+    if(!reader.expect("(")||!parse_funcarg(reader,arg,argtype,rettype,decl))return false;
     ret.arg=std::move(arg);
     ret.argtype=std::move(argtype);
     ret.type=std::move(rettype);
-    if(!parse_inblock(reader,ret.inblock,ret.inblockpos))return false;
-    ret.kind=CtrlKind::func;
+    if(decl){
+        if(!reader.expect(";"))return false;
+        ret.kind=CtrlKind::decl;
+    }
+    else{
+        if(!parse_inblock(reader,ret.inblock,ret.inblockpos))return false;
+        ret.kind=CtrlKind::func;
+        
+    }
     vec.push_back(std::move(ret));
     return true;
 }

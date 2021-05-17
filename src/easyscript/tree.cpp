@@ -251,7 +251,7 @@ bool after(Tree*& ret,PROJECT_NAME::Reader<std::string>& reader){
             ret=tmp2;
             continue;
         }
-        else if(reader.expect("++",expected)||reader.expect("--",expected)){
+        else if(reader.expectp("++",expected)||reader.expectp("--",expected)){
             auto tmp=make<Tree>(expected,EvalType::unknown,nullptr,ret);
             if(!tmp){
                 delete ret;

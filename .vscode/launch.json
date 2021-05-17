@@ -17,7 +17,7 @@
             "name": "(clang_build)",
             "type": "cppvsdbg",
             "request": "launch",
-            "program": "${workspaceFolder}/clang_build/built/built/httpc.exe",
+            "program": "${workspaceFolder}/clang_build/built/built/program.exe",
             "args": ["-tv","D:\\CommonLib\\netsoft\\cacert.pem"],
             "stopAtEntry": false,
             "cwd": "${workspaceFolder}/clang_build/built/built",

@@ -10,9 +10,14 @@
 #include"basic_tree.h"
 
 namespace PROJECT_NAME{
-    template<class Tree,class Kind,class Buf>
+    template<class Tree,class Kind,class Buf,class Checker,class Flags=bool>
     struct ExampleTree{
         Tree* result=nullptr;
+        Checker& check;
+        Flags flags;
+        int depthmax=0;
+
+        ExampleTree(Checker& func,int depth):check(func),depthmax(depth){}
 
         template<class Str>
         Tree* make_tree(Str symbol,Tree*left=nullptr,Tree* right=nullptr,Kind kind=Kind::unknown){
@@ -34,66 +39,30 @@ namespace PROJECT_NAME{
             delete tree;
         }
 
-        bool op_expect(Reader<Buf>*,const char*&){return false;}
 
-        template<class First,class... Other>
-        bool op_expect(Reader<Buf>* self,const char*& expected,First first,Other... other){
-            return self->expect(first,expected)||op_expect(self,expected,other...);
-        }
 
-        int depthmax=8;
-
-        bool mustexpect=false;
-
-        bool syntaxerr=false;
 
         bool expect(Reader<Buf>* self,int depth,const char*& expected){
-            auto check=[&](auto... args){return op_expect(self,expected,args...);};
-            switch (depth){
-            case 8:
-                if(mustexpect){
-                    if(check(":")){
-                        mustexpect=false;
-                        return true;
-                    }
-                    syntaxerr=true;
-                    return false;
-                }
-                else if(check("?")){
-                    mustexpect=true;
-                    return true;
-                }
-                return false;
-            case 7:
-                return check("=");
-            case 6:
-                return check("||");
-            case 5:
-                return check("&&");
-            case 4:
-                return check("==","!=");
-            case 3:
-                return check("<=",">=","<",">");
-            case 2:
-                return check("+","-");
-            case 1:
-                return check("*","/","%","<<",">>");
-            case 0:
-                return check("++","--","+","-","!");
-            default:
-                return false;
-            }
+            return check(self,expected,depth,flags);
         }
 
         Tree* primary_tree(Reader<Buf>* self){
             Tree* ret=nullptr;
             if(self->expect("(")){
-                ret=expression<Tree>(self,*this);
+                ret=parse_arg(nullptr,self,"()",")");
                 if(!ret)return nullptr;
-                if(!self->expect(")")){
-                    delete ret;
-                    return nullptr;
-                }
+            }
+            else if(self->expect("[")){
+                ret=parse_arg(nullptr,self,"[]","]");
+                if(!ret)return nullptr;
+            }
+            else if(self->expect("{")){
+                ret=parse_arg(nullptr,self,"{}","}");
+                if(!ret)return nullptr;
+            }
+            else if(self->expect("$")&&self->ahead("(")){
+                
+                if(!ret)return nullptr;
             }
             else if(self->ahead("\"")||self->ahead("'")){
                 Buf str;
@@ -126,7 +95,7 @@ namespace PROJECT_NAME{
                     delete tmp;
                     return nullptr;
                 }
-                auto obj=parse_arg(tmp,self);
+                auto obj=parse_arg(tmp,self,"()",")");
                 if(!obj)return nullptr;
                 ret=make_tree("new",nullptr,obj,Kind::create);
                 if(!ret){
@@ -153,23 +122,7 @@ namespace PROJECT_NAME{
             const char* expected=nullptr;
             while(true){
                 if(self->expect("(")){
-                    /*auto hold=make_tree("()",nullptr,ret);
-                    if(!hold){
-                        delete ret;
-                        return nullptr;
-                    }
-                    ret=hold;
-                    while(true){
-                        if(self->expect(")"))break;
-                        auto tmp=expression<Tree>(self,*this);
-                        if(!tmp||(!self->expect(",")&&!self->ahead(")"))){
-                            delete tmp;
-                            delete ret;
-                            return nullptr;
-                        }
-                        ret->arg.push_back(tmp);
-                    }*/
-                    if(!(ret=parse_arg(ret,self)))return nullptr;
+                   if(!(ret=parse_arg(ret,self,"()",")")))return nullptr;
                     continue;
                 }
                 else if(self->expect("[")){
@@ -180,12 +133,13 @@ namespace PROJECT_NAME{
                     }
                     ret=hold;
                     auto tmp=expression<Tree>(self,*this);
-                    if(!tmp||!self->ahead("]")){
+                    if(!tmp||!self->expect("]")){
                         delete tmp;
                         delete ret;
                         return nullptr;
                     }
                     ret->left=tmp;
+                    //if(!(ret=parse_arg(ret,self,"[]","]")))return nullptr;
                     continue;
                 }
                 else if(self->expect(".")){
@@ -213,7 +167,7 @@ namespace PROJECT_NAME{
                     ret=tmp2;
                     continue;
                 }
-                else if(self->expect("++",expected)||self->expect("--",expected)){
+                else if(self->expectp("++",expected)||self->expectp("--",expected)){
                     auto tmp=make_tree(expected,nullptr,ret);
                     if(!tmp){
                         delete ret;
@@ -227,17 +181,17 @@ namespace PROJECT_NAME{
             return ret;
         }
 
-        Tree* parse_arg(Tree* ret,Reader<Buf>* self){
-            auto hold=make_tree("()",nullptr,ret);
+        Tree* parse_arg(Tree* ret,Reader<Buf>* self,const char* symbol,const char* end){
+            auto hold=make_tree(symbol,nullptr,ret);
             if(!hold){
                 delete ret;
                 return nullptr;
             }
             ret=hold;
             while(true){
-                if(self->expect(")"))break;
+                if(self->expect(end))break;
                 auto tmp=expression<Tree>(self,*this);
-                if(!tmp||(!self->expect(",")&&!self->ahead(")"))){
+                if(!tmp||(!self->expect(",")&&!self->ahead(end))){
                     delete tmp;
                     delete ret;
                     return nullptr;
@@ -245,6 +199,29 @@ namespace PROJECT_NAME{
                 ret->arg.push_back(tmp);
             }
             return ret;
+        }
+
+        Tree* parse_closure(Reader<Buf>* self){
+            BasicBlock<Buf> block(false,false,true);
+            Buf closure="$";
+            if(self->expect("[")){
+                closure+="[";
+                self->readwhile(closure,until,']');
+                closure+="]";
+            }
+            if(!self->readwhile(closure,depthblock_withbuf,block))
+                return nullptr;
+            closure+=")";
+            if(self->expect("->")){
+                closure+="->";
+                self->readwhile(closure,until,'{');
+            }
+            block.bracket=false;
+            block.c_block=true;
+            closure+="{";
+            if(!self->readwhile(closure,depthblock_withbuf,block))return nullptr;
+            closure+="}";
+            return make_tree(closure,nullptr,nullptr,Kind::closure);
         }
     };
 }

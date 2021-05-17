@@ -1,6 +1,7 @@
 #include"http2.h"
 using namespace PROJECT_NAME;
 #include<fstream>
+#include<iostream>
 
 std::ofstream data("./sent.h2f",std::ios::binary);
 
@@ -55,7 +56,8 @@ bool HTTP2FrameLayer::read_a_frame(Reader<std::string>& reader,int framesize){
     while(true){
         reader.readwhile(http2frame_reader,frame);
         if(frame.continues){
-            if(!select_recv(reader.ref()))return false;
+            if(!select_recv(reader.ref()))
+                return false;
             continue;
         }
         break;

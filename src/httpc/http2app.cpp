@@ -114,6 +114,7 @@ bool HTTP2AppLayer::client(const std::string& url,void* user,OnCallback app,OnCa
         return false;
     bool initial=true;
     in_member=true;
+    app(appctx,user);
     while(true){
         if(!streams.do_a_proc(reader,initial))
             break;

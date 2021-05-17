@@ -258,7 +258,7 @@ bool op_expect(PROJECT_NAME::Reader<std::string>& reader,const char*& expected);
 
 template<class First,class... Args>
 bool op_expect(PROJECT_NAME::Reader<std::string>& reader,const char*& expected,First first,Args... args){
-    if(reader.expect(first,expected)){
+    if(reader.expectp(first,expected)){
         return true;
     }
     return op_expect(reader,expected,args...);

@@ -51,15 +51,23 @@ namespace PROJECT_NAME{
     using remove_cv_ref=std::remove_cv_t<std::remove_reference_t<T>>;
 
     template<class Buf>
-    struct Reader{    
-        using IgnoreHandler=bool(*)(Buf&,size_t&);
+    struct Reader{
     private:
         Buf buf;
         using Char=remove_cv_ref<decltype(buf[0])>;
+    public:
+        using IgnoreHandler=bool(*)(Buf&,size_t&);
+        using not_expect_default=bool(*)(Char);
+        using cmp_default=bool(*)(Char,Char);
+    private:
         size_t pos=0;
         IgnoreHandler ignore_cb=nullptr;
         bool stop=false;
         bool refed=false;
+
+        static bool default_cmp(Char c1,Char c2){
+            return c1==c2;
+        }
 
         template<class Str>
         inline size_t strlen(Str str){
@@ -127,21 +135,35 @@ namespace PROJECT_NAME{
             return s.size()<=pos;
         }
 
-        template<class Str>
-        size_t ahead_detail(Str& str,bool(*not_expect)(Char),
-                    bool(*cmp)(Char,Char)){
-            if(!cmp)return 0;
+        template<class T>
+        bool invoke_not_expect(bool(*not_expect)(T t),Char c){
+            if(!not_expect)return false;
+            return not_expect(c);
+        } 
+
+        template<class Func>
+        bool invoke_not_expect(Func& not_expect,Char c){
+            return not_expect(c);
+        }
+
+        bool invoke_not_expect(std::nullptr_t,Char){
+            return false;
+        }
+
+        template<class Str,class NotExpect=not_expect_default,class Cmp=cmp_default>
+        size_t ahead_detail(Str& str,NotExpect not_expect=NotExpect(),Cmp cmp=default_cmp){
+            //if(!cmp)return 0;
             if(!ignore())return 0;
             size_t i=0;
             for(;!on_end(str,i);i++){
                 if(endbuf(i))return 0;
                 if(!cmp(buf[pos+i],str[i]))return 0;
             }
-            if(not_expect&&i!=0){
-                if(not_expect(buf[pos+i]))return 0;
-            }
+            if(i==0)return 0;
+            if(invoke_not_expect(not_expect,buf[pos+i]))return 0;
             return i;
         }
+
     public:
         using char_type=Char;
         using buf_type=Buf;
@@ -162,27 +184,25 @@ namespace PROJECT_NAME{
             ignore_cb=cb;
         }
 
-        template<class Str>
-        size_t ahead(Str& str,bool(*not_expect)(Char)=nullptr,
-                    bool(*cmp)(Char,Char)=[](auto c1,auto c2)->bool{return c1==c2;}){
+        template<class Str,class NotExpect=not_expect_default,class Cmp=cmp_default>
+        size_t ahead(Str& str,NotExpect not_expect=NotExpect(),Cmp cmp=default_cmp){
             return ahead_detail(str,not_expect,cmp);
         }
 
-        size_t ahead(const Char* str,bool(*not_expect)(Char)=nullptr,
-                    bool(*cmp)(Char,Char)=[](auto c1,auto c2)->bool{return c1==c2;}){
+        template<class NotExpect=not_expect_default,class Cmp=cmp_default>
+        size_t ahead(const Char* str,NotExpect not_expect=NotExpect(),Cmp cmp=default_cmp){
             if(!str)return false;
             return ahead_detail(str,not_expect,cmp);
         }
 
-        size_t ahead(Char* str,bool(*not_expect)(Char)=nullptr,
-                    bool(*cmp)(Char,Char)=[](auto c1,auto c2)->bool{return c1==c2;}){
+        template<class NotExpect=not_expect_default,class Cmp=cmp_default>
+        size_t ahead(Char* str,NotExpect not_expect=NotExpect(),Cmp cmp=default_cmp){
             if(!str)return false;
             return ahead_detail(str,not_expect,cmp);
         }
         
-        template<class Str>
-        bool expect(Str& str,bool(*not_expect)(Char)=nullptr,
-                    bool(*cmp)(Char,Char)=[](auto c1,auto c2)->bool{return c1==c2;}){
+        template<class Str,class NotExpect=not_expect_default,class Cmp=cmp_default>
+        bool expect(Str& str,NotExpect not_expect=NotExpect(),Cmp cmp=default_cmp){
             auto size=ahead(str,not_expect,cmp);
             if(size==0)return false;
             pos+=size;
@@ -190,10 +210,9 @@ namespace PROJECT_NAME{
             return true;
         }
 
-        template<class Str,class Ctx>
-        bool expect(Str& str,Ctx& ctx,bool(*not_expect)(Char)=nullptr,
-                    bool(*cmp)(Char,Char)=[](auto c1,auto c2)->bool{return c1==c2;}){
-            if(expect(str,not_expect,cmp)){
+        template<class Str,class Ctx,class NotExpect=not_expect_default,class Cmp=cmp_default>
+        bool expectp(Str& str,Ctx& ctx,NotExpect not_expect=NotExpect(),Cmp cmp=default_cmp){
+            if(expect<Str,NotExpect,Cmp>(str,not_expect,cmp)){
                 ctx=str;
                 return true;
             }
@@ -504,5 +523,10 @@ namespace PROJECT_NAME{
         }
         return size();
     }
-   
+    
+    template<class Buf>
+    using cmpf_t=typename Reader<Buf>::cmp_default;
+
+    template<class Buf>
+    using nexpf_t=typename Reader<Buf>::not_expect_default;
 }

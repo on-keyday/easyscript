@@ -11,27 +11,45 @@
 using namespace PROJECT_NAME;
 using namespace control;
 
+template<class T>
+T testfunc(){
+    auto i=T();
+    return i;
+}
+
+template<class T,class Func=decltype(testfunc<T>)>
+T test2(Func f=testfunc<T>){
+    return f();
+}
+
+
 int STDCALL hardtest(){
     auto code=
 R"(
-    var call ([]string)->int = null;
-    func main(argv []string)->int{
+    /*decl printf(string,...);
+    //decl call([]string)->int;
+    func main(argv string...)-> (int,error) -> void {
         if argv.len() < 1 {
             return 0;
         }
         printf(argv[0]);
-        return 0;
+        return ;
     }
 
-    call=main;
+    call:=main|0;
 
-    call();
+    a=[0,1,2,3,4][4];
+
+    call();*/
+
+    $(i,e)->void{print(i,e);};
 )";
     Reader<std::string> test(code,ignore_c_comments);
     std::vector<Control> globalvec;
     auto t=parse_all(test,globalvec);
     LinePosContext ctx;
     test.readwhile(linepos,ctx);
+
     return 0;
 }
 

@@ -56,7 +56,7 @@ namespace PROJECT_NAME{
         Buf buf;
         using Char=remove_cv_ref<decltype(buf[0])>;
     public:
-        using IgnoreHandler=bool(*)(Buf&,size_t&);
+        using IgnoreHandler=bool(*)(Buf&,size_t&,size_t bufsize);
         using not_expect_default=bool(*)(Char);
         using cmp_default=bool(*)(Char,Char);
     private:
@@ -70,10 +70,9 @@ namespace PROJECT_NAME{
         }
 
         template<class Str>
-        inline size_t strlen(Str str){
+        inline size_t strlen(Str str) const{
             size_t i=0;
             while(str[i]!=0){
-                if(str[i]==0)return i;
                 if(str[i+1]==0)return i+1;
                 if(str[i+2]==0)return i+2;
                 if(str[i+3]==0)return i+3;
@@ -116,7 +115,7 @@ namespace PROJECT_NAME{
             refcheck();
             if(stop)return false;
             if(ignore_cb){
-                stop=!ignore_cb(buf,pos);
+                stop=!ignore_cb(buf,pos,buf_size(buf));
                 return stop==false;
             }
             return true;
@@ -224,9 +223,9 @@ namespace PROJECT_NAME{
         }
 
         bool seek(size_t pos,bool strict=false){
-            if(buf.size()<=pos){
+            if(buf_size(buf)<=pos){
                 if(strict)return false;
-                pos=buf.size();
+                pos=buf_size(buf);
             }
             this->pos=pos;
             if(!endbuf())stop=false;
@@ -271,18 +270,8 @@ namespace PROJECT_NAME{
             this->ignore_cb=hander;
             return ret;
         }
-        /*
-        template<class T>
-        using AddHandler=bool(*)(Buf&,T);
+ 
         
-        template<class T>
-        bool add(T toadd,AddHandler<T> add_handler){
-            if(!add_handler)return false;
-            if(!add_handler(buf,toadd))return false;
-            return release();
-        }*/
-        
-
         template<class T>
         size_t read_byte(T* res=nullptr,size_t size=sizeof(T),
         T (*endian_handler)(const char*)=translate_byte_as_is,bool strict=false){
@@ -319,38 +308,7 @@ namespace PROJECT_NAME{
 
         Buf& ref(){refed=true;return buf;}
 
-        /*
-        bool depthblock(bool(*check)(Reader*,bool)=
-            [](auto self,auto isbegin)->bool{
-                if(isbegin){
-                    return self->expect("{");
-                }
-                else{
-                    return self->expect("}");
-                }
-            }
-            ){
-            if(!check)return false;
-            if(!check(this,true))return false;
-            size_t dp=0;
-            bool ok=false;
-            while (!eof()) {  
-                if (check(this,true)) {
-                    dp++;
-                }                
-                if (check(this,false)) {
-                    if (dp == 0){
-                        ok=true;
-                        break;
-                    }
-                    dp--;
-                }
-                
-                pos++;
-            }
-            return ok;
-        }*/
-
+        
         template<class Ret>
         static bool read_string(Reader* self,Ret& buf,bool& noline,bool begin){
             if(!self)return false;
@@ -458,22 +416,22 @@ namespace PROJECT_NAME{
     };
 
     template<class Buf>
-    bool ignore_space(Buf& buf,size_t& pos){
+    bool ignore_space(Buf& buf,size_t& pos,size_t bufsize){
         using Char=remove_cv_ref<decltype(buf[0])>;
-        while(buf.size()>pos){
+        while(bufsize>pos){
             if(buf[pos]==(Char)' '||buf[pos]==(Char)'\t'){
                 pos++;
                 continue;
             }
             break;
         }
-        return buf.size()>pos;
+        return bufsize>pos;
     }
     
     template<class Buf>
-    bool ignore_space_line(Buf& buf,size_t& pos){
+    bool ignore_space_line(Buf& buf,size_t& pos,size_t bufsize){
         using Char=remove_cv_ref<decltype(buf[0])>;
-        while(buf.size()>pos){
+        while(bufsize>pos){
             auto c=buf[pos];
             if(c==(Char)' '||c==(Char)'\t'||c==(Char)'\n'||c==(Char)'\r'){
                 pos++;
@@ -481,13 +439,13 @@ namespace PROJECT_NAME{
             }
             break;
         }
-        return buf.size()>pos;
+        return bufsize>pos;
     }
 
     template<class Buf>
-    bool ignore_c_comments(Buf& buf,size_t& pos){
+    bool ignore_c_comments(Buf& buf,size_t& pos,size_t bufsize){
         using Char=remove_cv_ref<decltype(buf[0])>;
-        auto size= [&](int ofs=0){return buf.size()>(pos+ofs);};
+        auto size= [&](int ofs=0){return bufsize>(pos+ofs);};
         while(size()){
             auto c=buf[pos];
             if(c==(Char)' '||c==(Char)'\t'||c==(Char)'\n'||c==(Char)'\r'){

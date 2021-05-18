@@ -27,11 +27,11 @@ std::string control::parse_type(PROJECT_NAME::Reader<std::string>& reader,bool s
     }
     else if(reader.expect("(")){
         std::vector<std::string> _,types;
-        std::string ret;
-        if(!parse_funcarg(reader,_,types,ret,strict)){
+        std::string ret,opt;
+        if(!parse_funcarg(reader,_,types,ret,opt,strict)){
             return "";
         }
-        return typevec_to_type(types,ret);
+        return typevec_to_type(types,ret,opt);
     }
     else if(is_c_id_top_usable(reader.achar())){
         reader.readwhile(name,untilincondition,is_c_id_usable<char>);
@@ -51,7 +51,7 @@ std::string control::parse_type(PROJECT_NAME::Reader<std::string>& reader,bool s
     return "";
 }
 
-bool control::parse_funcarg(PROJECT_NAME::Reader<std::string>& reader,std::vector<std::string>& arg,std::vector<std::string>& type,std::string& ret,bool strict){
+bool control::parse_funcarg(PROJECT_NAME::Reader<std::string>& reader,std::vector<std::string>& arg,std::vector<std::string>& type,std::string& ret,std::string& opt,bool strict){
     size_t count=0;
     while(!reader.expect(")")){
         std::string argname;
@@ -99,6 +99,13 @@ bool control::parse_funcarg(PROJECT_NAME::Reader<std::string>& reader,std::vecto
         ret=parse_type(reader,true);
         if(ret=="")return false;
     }
+    if(reader.expect("@")){
+        if(!reader.expect("("))return false;
+        opt+="@(";
+        reader.readwhile(opt,until,')');
+        if(!reader.expect(")"))return false;
+        opt+=")";
+    }
     return true;
 }
 
@@ -144,7 +151,7 @@ bool control::parse_arg_need_name(Reader<std::string>& reader,std::string& name,
     return true;
 }
 
-std::string control::typevec_to_type(std::vector<std::string>& types,std::string& ret){
+std::string control::typevec_to_type(std::vector<std::string>& types,std::string& ret,std::string& opt){
     bool first=true;
     std::string name="(";
     size_t num=0;
@@ -167,5 +174,6 @@ std::string control::typevec_to_type(std::vector<std::string>& types,std::string
     if(ret!=""){
         name+="->"+ret;
     }
+    name+=opt;
     return name;
 }

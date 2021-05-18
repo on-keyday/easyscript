@@ -102,14 +102,14 @@ bool control::parse_expr(PROJECT_NAME::Reader<std::string>& reader,std::vector<C
 
 
 bool control::parse_var(PROJECT_NAME::Reader<std::string>& reader,std::vector<Control>& vec){
-    bool bracket=false;
+    const char* bracket=nullptr;
     if(reader.expect("(")){
-        bracket=true;
+        bracket=")";
     }
     return parse_var_detail(reader,vec,bracket,false)&&bracket?true:reader.expect(";");
 }
 
-bool control::parse_var_detail(PROJECT_NAME::Reader<std::string>& reader,std::vector<Control>& vec,bool bracket,bool initeq){
+bool control::parse_var_detail(PROJECT_NAME::Reader<std::string>& reader,std::vector<Control>& vec,const char* bracket,bool initeq){
     Control hold;
     bool check=false;
     do{
@@ -164,8 +164,8 @@ bool control::parse_var_detail(PROJECT_NAME::Reader<std::string>& reader,std::ve
             vec.push_back(std::move(hold));
             remain--;
         }
-    }while(bracket&&!reader.ahead(")"));
-    if(bracket&&!reader.expect(")")){
+    }while(bracket&&!reader.ahead(bracket));
+    if(bracket&&!reader.expect(bracket)){
         return false;
     }
     return true;
@@ -204,11 +204,14 @@ bool control::parse_func(PROJECT_NAME::Reader<std::string>& reader,std::vector<C
     reader.readwhile(ret.name,untilincondition,is_c_id_usable<char>);
     if(ret.name=="")return false;
     std::vector<std::string> arg,argtype;
-    std::string rettype;
-    if(!reader.expect("(")||!parse_funcarg(reader,arg,argtype,rettype,decl))return false;
+    std::string rettype,opt;
+    if(!reader.expect("(")||!parse_funcarg(reader,arg,argtype,rettype,opt,decl))return false;
     ret.arg=std::move(arg);
     ret.argtype=std::move(argtype);
     ret.type=std::move(rettype);
+    if(opt!=""){
+        ret.argtype.push_back(std::move(opt));
+    }
     if(decl){
         if(!reader.expect(";"))return false;
         ret.kind=CtrlKind::decl;

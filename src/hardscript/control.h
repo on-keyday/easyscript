@@ -178,7 +178,7 @@ namespace control{
 
     bool parse_var(PROJECT_NAME::Reader<std::string>& reader,std::vector<Control>& vec);
 
-    bool parse_var_detail(PROJECT_NAME::Reader<std::string>& reader,std::vector<Control>& vec,bool bracket,bool initeq);
+    bool parse_var_detail(PROJECT_NAME::Reader<std::string>& reader,std::vector<Control>& vec,const char* bracket,bool initeq);
 
     bool parse_if(PROJECT_NAME::Reader<std::string>& reader,std::vector<Control>& vec);
 

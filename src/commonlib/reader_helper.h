@@ -206,7 +206,7 @@ namespace PROJECT_NAME{
             if (check(self,true)) {
                 dp++;
             }                
-            else if (check(self,false)) {
+            if (check(self,false)) {
                 if (dp == 0){
                     ok=true;
                     break;

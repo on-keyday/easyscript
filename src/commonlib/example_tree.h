@@ -60,7 +60,7 @@ namespace PROJECT_NAME{
                 ret=parse_arg(nullptr,self,"{}","}");
                 if(!ret)return nullptr;
             }
-            else if(self->expect("$",[](char c){return c!='['&&c!='(';})){
+            else if(self->expect("$",[](char c){return c!='['&&c!='('&&c!='{';})){
                 ret=parse_closure(self);
                 if(!ret)return nullptr;
             }
@@ -220,7 +220,7 @@ namespace PROJECT_NAME{
                 closure+="]";
                 needless=true;
             }
-            if(!needless||self->ahead("(")){
+            if(self->ahead("(")){
                 closure+="(";
                 if(!self->readwhile(closure,depthblock_withbuf,block))
                     return nullptr;

@@ -103,9 +103,17 @@ namespace PROJECT_NAME{
                     return nullptr;
                 }
             }  
-            else if(is_c_id_top_usable(self->achar())){
+            else if(is_c_id_top_usable(self->achar())||self->achar()=='$'){
                 Buf id;
-                self->readwhile(id,untilincondition,is_c_id_usable<char>);
+                if(self->expect("$$")){
+                    id="$$";
+                }
+                else if(self->expect("$@")){
+                    id="$@";
+                }
+                else{
+                    self->readwhile(id,untilincondition,is_c_id_usable<char>);
+                }
                 if(id.size()==0)return nullptr;
                 if(id=="true"||id=="false"){
                     ret=make_tree(id,nullptr,nullptr,Kind::boolean);

@@ -45,4 +45,14 @@ namespace compiler{
     */
 
    bool collect_ids(std::vector<control::Control>& ctrlvec,IdTable& table);
+
+   unsigned int calcable_as_const(control::Tree* t,std::string& str,long long& sint,unsigned long long& uint,double& floats);
+   
+   inline void packstr(std::string& str,std::string& from){str="'"+from+"'";}
+
+   bool calcable_bool(control::Tree* t,std::string& str,long long& sint,unsigned long long& uint,double& floats);
+
+   unsigned int calcable_num(control::Tree* t,std::string& str,long long& sint,unsigned long long& uint,double& floats);
+
+   
 }

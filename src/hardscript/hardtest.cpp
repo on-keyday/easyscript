@@ -26,7 +26,7 @@ T test2(Func f=testfunc<T>){
 int STDCALL hardtest(){
     auto code=
 R"(
-    /*decl printf(string,...);
+    decl printf(string,...);
     //decl call([]string)->int;
     func main(argv string...)-> (int,error) -> void {
         if argv.len() < 1 {
@@ -36,13 +36,14 @@ R"(
         return ;
     }
 
-    call:=main|0;
+    call:=main;
 
     a=[0,1,2,3,4][4];
 
-    call();*/
+    call();
 
-    $[&]->void{print(a);};
+    i:=$[]{return $@;};
+    i()()();
 )";
     Reader<std::string> test(code,ignore_c_comments);
     std::vector<Control> globalvec;

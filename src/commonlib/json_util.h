@@ -1,8 +1,9 @@
 #include"reader.h"
 #include<string>
-#include<map>
+#include<unordered_map>
 #include<vector>
-#include<exception>
+#include<cstring>
+
 
 namespace PROJECT_NAME{
     enum class JSONType{
@@ -80,14 +81,15 @@ namespace PROJECT_NAME{
     };
 
     struct JSON{
+        using JSONObjectType=std::unordered_map<std::string,JSON>;
+        using JSONArrayType=std::vector<JSON>;
     private:
-        using JSONMap=std::map<std::string,JSON>;
-        using JSONArray=std::vector<JSON>;
+        
         union{
             bool boolean;
             EasyStr value=EasyStr();
-            JSONMap* obj;
-            JSONArray* array;
+            JSONObjectType* obj;
+            JSONArrayType* array;
         };
         JSONType type=JSONType::unset;
 
@@ -101,30 +103,33 @@ namespace PROJECT_NAME{
             }
         }
 
-        bool init_as_obj(std::initializer_list<std::pair<const std::string,JSON>>&& json){
-            obj=init<JSONMap>();
+        bool init_as_obj(JSONObjectType&& json){
+            obj=init<JSONObjectType>();
             if(!obj){
                 type=JSONType::unset;
                 return false;
             }
             type=JSONType::object;
-            for(auto& o:json){
-                obj->try_emplace(o.first,std::move(o.second));
-            }
-            
+            *obj=std::move(json);
             return true;
         }
 
-        bool init_as_array(std::initializer_list<JSON>&& json){
-            array=init<JSONArray>();
+        bool init_as_array(JSONArrayType&& json){
+            array=init<JSONArrayType>();
             if(!array){
                 type=JSONType::unset;
                 return false;
             }
             type=JSONType::array;
-            for(auto& o:json){
-                
-            }
+            *array=std::move(json);
+            return true;
+        }
+
+        template<class Num>
+        bool init_as_num(Num num){
+            type=JSONType::integer;
+            auto n=std::to_string(num);
+            value=EasyStr(n.c_str(),n.size());
             return true;
         }
 
@@ -198,7 +203,56 @@ namespace PROJECT_NAME{
             return *this;
         }
 
-        std::string to_string_detail(bool format,size_t ofs,size_t indent,size_t base_skip,bool useskip);
+        std::string to_string_detail(bool format,size_t ofs,size_t indent,size_t base_skip,bool useskip) const;
+
+        std::string escape(const std::string& base);
+
+        template<class Struct>
+        auto to_json(const Struct& in) 
+        -> decltype(in.to_json()){
+            return in.to_json();
+        }
+
+        template<class Struct>
+        auto to_json(Struct&& in) 
+        -> decltype(in.to_json()){
+            return in.to_json();
+        }
+
+        template<class Struct>
+        auto to_json(Struct* in) 
+        -> decltype(in->to_json()){
+            return in->to_json();
+        }
+
+        std::string to_json(JSON&& in){
+            return in.to_string();
+        }
+
+        template<class Vec>
+        auto to_json(const Vec& vec)
+        ->decltype(to_json(vec[0])){
+            JSON js=JSONArrayType{};
+            for(auto& o:vec){
+                auto tmp=to_json(o);
+                Reader<const char*> r(tmp.c_str());
+                js.append(parse_json_detail(r));
+            }
+            return js.to_string();
+        }
+
+        template<class Map>
+        auto to_json(const Map& m)
+        ->decltype(to_json(m[std::string()])){
+            JSON js=JSONObjectType{};
+            for(auto& o:m){
+                auto tmp=to_json(o.second);
+                Reader<const char*> r(tmp.c_str());
+                js[o.first]=parse_json_detail(r);
+            }
+            return js.to_string();
+        }
+
     public:
 
             
@@ -264,10 +318,49 @@ namespace PROJECT_NAME{
             boolean=b;
         }
 
-        JSON(long long num){
-            type=JSONType::integer;
-            auto n=std::to_string(num);
-            value=EasyStr(n.c_str(),n.size());
+        JSON(char num){init_as_num(num);}
+        JSON(unsigned char num){init_as_num(num);}
+        JSON(short num){init_as_num(num);}
+        JSON(unsigned short num){init_as_num(num);}
+        JSON(int num){init_as_num(num);}
+        JSON(unsigned int num){init_as_num(num);}
+        JSON(long num){init_as_num(num);}
+        JSON(unsigned long num){init_as_num(num);}
+        JSON(long long num){init_as_num(num);}
+
+        template<class Struct>
+        JSON(const Struct& in){
+            try{
+                parse_assign(to_json(in));
+            }
+            catch(...){
+                type=JSONType::unset;
+            }
+        }
+
+        template<class Struct>
+        JSON(Struct&& in){
+            try{
+                parse_assign(to_json(in));
+            }
+            catch(...){
+                type=JSONType::unset;
+            }
+        }
+
+        template<class Struct>
+        JSON(Struct* in){
+            if(!in){
+                type=JSONType::null;
+            }
+            else{
+                try{
+                    parse_assign(to_json(in));
+                }
+                catch(...){
+                    type=JSONType::unset;
+                } 
+            }
         }
 
         JSON(double num){
@@ -276,21 +369,29 @@ namespace PROJECT_NAME{
             value=EasyStr(n.c_str(),n.size());
         }
 
-        JSON(const std::string& str){
+        JSON(const std::string& in){
             type=JSONType::string;
+            auto str=escape(in);
             value=EasyStr(str.c_str(),str.size());
         }
 
-        JSON(std::initializer_list<std::pair<const std::string,JSON>>&& json){
+        JSON(const char* in){
+            type=JSONType::string;
+            auto str=escape(in);
+            value=EasyStr(str.c_str());
+        }
+
+        JSON(JSONObjectType&& json){
             init_as_obj(std::move(json));   
         }
 
-        JSON(std::initializer_list<JSON>&& json){
+        JSON(JSONArrayType&& json){
             init_as_array(std::move(json));
         }
 
         JSON& operator[](size_t pos){
-            if(type!=JSONType::array)throw std::exception("object kind miss match.");
+            if(type!=JSONType::array)throw "object kind miss match.";
+            if(array->size()<=pos)throw "invalid index";
             return array->operator[](pos);
         }
 
@@ -300,17 +401,33 @@ namespace PROJECT_NAME{
             return true;
         }
         
-        JSON& operator[](std::string& key){
-            if(type!=JSONType::object)throw std::exception("object kind miss match.");
+        JSON& operator[](const std::string& key){
+            if(type!=JSONType::object)throw "object kind miss match.";
             return obj->operator[](key);
         }
+
+        JSON* idx(size_t pos){
+            if(type!=JSONType::array)return nullptr;
+            if(array->size()<=pos)return nullptr;
+            return &array->operator[](pos);
+        }
+
+        JSON* idx(const std::string& key){
+            if(type!=JSONType::object)return nullptr;
+            if(!obj->count(key))return nullptr;
+            return &obj->operator[](key);
+        }
+
+        JSONType gettype()const{return type;}
 
         ~JSON(){
             destruct();
         }
         bool parse_assign(const std::string& in);
 
-        std::string to_string(bool format=false,size_t indent=2,bool useskip=false);
+        std::string to_string(bool format=false,size_t indent=2,bool useskip=false) const;
     };
     
+    using JSONObject=JSON::JSONObjectType;
+    using JSONArray=JSON::JSONArrayType;
 }

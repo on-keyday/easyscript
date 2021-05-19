@@ -33,6 +33,7 @@ namespace control{
                 delete p;
             }
         }
+        std::string to_json()const;
     };
     
     struct Flags{
@@ -164,6 +165,8 @@ namespace control{
         ~Control(){
             delete expr;
         }
+
+        std::string to_json()const;
     };
 
     bool parse_all(PROJECT_NAME::Reader<std::string>& reader,std::vector<Control>& vec);

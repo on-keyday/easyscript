@@ -6,6 +6,7 @@
 
 #include"control.h"
 #include"type_parse.h"
+#include"../commonlib/json_util.h"
 
 using namespace PROJECT_NAME;
 using namespace control;
@@ -67,13 +68,13 @@ bool control::control_parse(Reader<std::string>& reader,std::vector<Control>& ve
         Control ret;
         ret.name="return";
         if(!reader.ahead(";")){
-            if(!(ret.expr=expr_parse(reader)));
+            if(!(ret.expr=expr_parse(reader)))return false;
         }
         if(!reader.expect(";"))return false;
         vec.push_back(std::move(ret));
     }
     else if(check_initexpr(reader)){
-         return parse_var_detail(reader,vec,false,true)&&reader.expect(";");
+         return parse_var_detail(reader,vec,nullptr,true)&&reader.expect(";");
     }
     else{
         return parse_expr(reader,vec,true);
@@ -238,7 +239,7 @@ bool control::parse_for(PROJECT_NAME::Reader<std::string>& reader,std::vector<Co
     size_t beginpos=vec.size()-1;
     if(!reader.ahead(";")){
         if(check_initexpr(reader)){
-            if(!parse_var_detail(reader,vec,false,true))return false;
+            if(!parse_var_detail(reader,vec,nullptr,true))return false;
             vec[beginpos].name="for-range";
         }
         else{
@@ -268,4 +269,36 @@ bool control::parse_for(PROJECT_NAME::Reader<std::string>& reader,std::vector<Co
     if(!parse_inblock(reader,hold.inblock,hold.inblockpos))return false;
     vec.push_back(std::move(hold));
     return true;
+}
+
+std::string Tree::to_json()const{
+    JSON json=JSONObject{};
+    json["kind"]=(int)kind;
+    json["symbol"]=symbol;
+    json["left"]=left;
+    json["right"]=right;
+    json["arg"]=JSONArray{};
+    for(auto& o:arg){
+        json["arg"].append(o);
+    }
+    return json.to_string();
+}
+
+std::string Control::to_json()const{
+    JSON json=JSONObject{};
+    json["kind"]=(int)kind;
+    json["name"]=name;
+    json["expr"]=expr;
+    json["type"]=type;
+    json["inblockpos"]=(long long)inblockpos;
+    json["inblock"]=inblock;
+    json["param"]=JSONArray{};
+    for(auto& o:arg){
+        json["param"].append(o);
+    }
+    json["paramtype"]=JSONArray{};
+    for(auto& o:argtype){
+        json["paramtype"].append(o);
+    }
+    return json.to_string();
 }

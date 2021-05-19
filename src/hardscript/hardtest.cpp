@@ -53,16 +53,19 @@ R"(
     th($(num){
         return num<=1?num:$$(num-1)+$$(num-2);
     },20);
-    //i()()();
+    i()()();
 )";
     Reader<std::string> test(code,ignore_c_comments);
     std::vector<Control> globalvec;
     auto t=parse_all(test,globalvec);
     LinePosContext ctx;
     test.readwhile(linepos,ctx);
-    JSON json(nullptr);
-    json.parse_assign(R"( {"hello":{"lang":["c","go","python"]}} )");
-    std::cout << json.to_string(true);
+    JSON json;
+    std::cout << json.to_string(true,4);
+    json=true;
+    json.gettype();
+    json=nullptr;
+    json=JSON(Control());
     return 0;
 }
 

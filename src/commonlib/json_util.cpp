@@ -44,7 +44,7 @@ JSON JSON::parse_json_detail(Reader<const char*>& reader){
         if(!reader.string(str,true))throw "unreadable key";
         str.pop_back();
         str.erase(0,1);
-        return JSON(str);
+        return JSON(str,JSONType::string);
     }
     else if(reader.achar()=='-'||is_digit(reader.achar())){
         bool minus=false;
@@ -56,7 +56,11 @@ JSON JSON::parse_json_detail(Reader<const char*>& reader){
         reader.readwhile(num,number,&ctx);
         if(!ctx.succeed)throw "undecodable number";
         if(ctx.floatf){
-            return JSON(num,JSONType::floats);
+            auto n=std::stod(num);
+            if(minus){
+                n=-n;
+            }
+            return JSON(n);
         }
         else{
             auto n=std::stoll(num);
@@ -76,13 +80,13 @@ JSON JSON::parse_json_detail(Reader<const char*>& reader){
     throw "not json";
 }
 
-std::string JSON::to_string(bool format,size_t indent,bool useskip){
+std::string JSON::to_string(bool format,size_t indent,bool useskip) const{
     auto ret=to_string_detail(format,1,indent,0,useskip);
-    if(ret.size())ret+="\n";
+    if(ret.size()&&format)ret+="\n";
     return ret;
 }
 
-std::string JSON::to_string_detail(bool format,size_t ofs,size_t indent,size_t base_skip,bool useskip){
+std::string JSON::to_string_detail(bool format,size_t ofs,size_t indent,size_t base_skip,bool useskip)const{
     if(type==JSONType::unset)return "";
     std::string ret;
     bool first=true;
@@ -104,7 +108,8 @@ std::string JSON::to_string_detail(bool format,size_t ofs,size_t indent,size_t b
             fmtprint(ofs);
             auto adds="\""+kv.first+"\""+":";
             ret+=adds;
-            auto tmp=kv.second.to_string_detail(format,ofs+1,indent,base_skip+adds.size(),useskip);
+            if(format)ret+=" ";
+            auto tmp=kv.second.to_string_detail(format,ofs+1,indent,base_skip+adds.size()+1,useskip);
             if(tmp=="")return "";
             ret+=tmp;
         }
@@ -143,4 +148,46 @@ std::string JSON::to_string_detail(bool format,size_t ofs,size_t indent,size_t b
         ret.append(value.const_str(),value.size());
     }
     return ret;
+}
+
+std::string JSON::escape(const std::string& base){
+    std::string s;
+    for(auto c:base){
+        if(c=='\\'){
+            s+="\\\\";
+        }
+        else if(c=='"'){
+            s+="\\\"";
+        }
+        else if(c=='\n'){
+            s+="\\n";
+        }
+        else if(c=='\r'){
+            s+="\\r";
+        }
+        else if(c=='\t'){
+            s+="\\t";
+        }
+        else if(c<0x20||c>0x7E){
+            auto msb=(c&0xf0)>>4;
+            auto lsb=c&0x0f;
+            auto translate=[](unsigned char c)->unsigned char{
+                if(c>15)return 0;
+                if(c<10){
+                    return c+'0';
+                }
+                else{
+                    return c-10+'a';
+                }
+                return 0;
+            };
+            s+="\\u00";
+            s+=translate(msb);
+            s+=translate(lsb);
+        }
+        else{
+            s+=c;
+        }
+    }
+    return s;
 }

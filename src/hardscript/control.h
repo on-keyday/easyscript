@@ -8,6 +8,7 @@
 #include"../commonlib/example_tree.h"
 #include<string>
 #include<vector>
+#include"../commonlib/json_util.h"
 
 namespace control{
     enum class TreeKind {
@@ -33,7 +34,7 @@ namespace control{
                 delete p;
             }
         }
-        std::string to_json()const;
+        void to_json(PROJECT_NAME::JSON& j)const;
     };
     
     struct Flags{
@@ -166,7 +167,7 @@ namespace control{
             delete expr;
         }
 
-        std::string to_json()const;
+        void to_json(PROJECT_NAME::JSON& j)const;
     };
 
     bool parse_all(PROJECT_NAME::Reader<std::string>& reader,std::vector<Control>& vec);

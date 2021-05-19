@@ -9,20 +9,27 @@
 #include"control.h"
 #include"../commonlib/json_util.h"
 #include<iostream>
+#include<filesystem>
 using namespace PROJECT_NAME;
 using namespace control;
+namespace PROJECT_NAME{
+    void to_json(JSON& to,const std::filesystem::directory_entry& dir){
+        to[dir.path().filename().string()]=dir.file_size();
+    }
 
-template<class T>
-T testfunc(){
-    auto i=T();
-    return i;
+    void to_json(JSON& to,const std::filesystem::path& dir){
+        std::filesystem::directory_iterator it(dir),end;
+        std::error_code code;
+        auto& cd=to[dir.filename().string()];
+        cd="{}"_json;
+        for(;it!=end&&!code;it.increment(code)){
+            to_json(cd,*it);
+        }
+        if(code){
+            to=JSON();
+        }
+    }
 }
-
-template<class T,class Func=decltype(testfunc<T>)>
-T test2(Func f=testfunc<T>){
-    return f();
-}
-
 
 int STDCALL hardtest(){
     auto code=
@@ -60,12 +67,13 @@ R"(
     auto t=parse_all(test,globalvec);
     LinePosContext ctx;
     test.readwhile(linepos,ctx);
-    JSON json;
-    std::cout << json.to_string(true,4);
-    json=true;
-    json.gettype();
-    json=nullptr;
-    json=JSON(Control());
+    JSON json(globalvec);
+    std::cout << json.to_string(4);
+    std::filesystem::path cd;
+    cd=std::filesystem::current_path();
+    json=JSON(cd);
+    auto m=json.path(R"(/)");
+    std::cout << m->to_string(4);
     return 0;
 }
 

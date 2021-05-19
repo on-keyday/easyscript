@@ -313,7 +313,7 @@ namespace PROJECT_NAME{
         static bool read_string(Reader* self,Ret& buf,bool& noline,bool begin){
             if(!self)return false;
             if(begin){
-                if(self->achar()!=(Char)'\''&&self->achar()!=(Char)'"')return false;
+                if(self->achar()!=(Char)'\''&&self->achar()!=(Char)'"'&&self->achar()!='`')return false;
                 buf.push_back(self->achar());
                 self->increment();
                 //ctx=self->set_ignore(nullptr);

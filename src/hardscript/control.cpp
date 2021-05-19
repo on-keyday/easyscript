@@ -6,7 +6,7 @@
 
 #include"control.h"
 #include"type_parse.h"
-#include"../commonlib/json_util.h"
+
 
 using namespace PROJECT_NAME;
 using namespace control;
@@ -271,34 +271,27 @@ bool control::parse_for(PROJECT_NAME::Reader<std::string>& reader,std::vector<Co
     return true;
 }
 
-std::string Tree::to_json()const{
-    JSON json=JSONObject{};
+void Tree::to_json(JSON& json)const{
     json["kind"]=(int)kind;
     json["symbol"]=symbol;
     json["left"]=left;
     json["right"]=right;
-    json["arg"]=JSONArray{};
     for(auto& o:arg){
-        json["arg"].append(o);
+        json["arg"].push_back(o);
     }
-    return json.to_string();
 }
 
-std::string Control::to_json()const{
-    JSON json=JSONObject{};
+void Control::to_json(JSON& json)const{
     json["kind"]=(int)kind;
     json["name"]=name;
     json["expr"]=expr;
     json["type"]=type;
     json["inblockpos"]=(long long)inblockpos;
     json["inblock"]=inblock;
-    json["param"]=JSONArray{};
     for(auto& o:arg){
-        json["param"].append(o);
+        json["param"].push_back(o);
     }
-    json["paramtype"]=JSONArray{};
     for(auto& o:argtype){
-        json["paramtype"].append(o);
+        json["paramtype"].push_back(o);
     }
-    return json.to_string();
 }

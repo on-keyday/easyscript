@@ -139,5 +139,8 @@ R"(
     std::u32string str;
     int errpos=0;
     utf8.readwhile(str,utf8toutf32,errpos);
+    std::string s8;
+    Reader<std::u32string_view> utf32(str);
+    utf32.readwhile(s8,utf32toutf8,errpos);
     return 0;
 }

@@ -19,6 +19,23 @@ namespace PROJECT_NAME{
         array
     };
 
+    enum class JSONFormat{
+        space=0x1,
+        tab=0x2,
+        mustline=0x4,
+        elmpush=0x8,
+        afterspace=0x10,
+        mustspace=0x20,
+        endline=0x40,
+        must=mustline|mustspace,
+        defaultf=space|afterspace|endline,
+        tabnormal=tab|afterspace|endline,
+        shift=space|elmpush|afterspace,
+        spacemust=space|mustspace,
+        noendline=space|afterspace,
+        noendlinetab=tab|afterspace
+    };
+
     
     struct EasyStr{
     private:
@@ -145,7 +162,7 @@ namespace PROJECT_NAME{
 
         JSON parse_json_detail(Reader<const char*>& reader);
 
-        std::string to_string_detail(bool format,size_t ofs,size_t indent,size_t base_skip,bool useskip) const;
+        std::string to_string_detail(JSONFormat format,size_t ofs,size_t indent,size_t base_skip) const;
 
         std::string escape(const std::string& base);
 
@@ -269,6 +286,7 @@ namespace PROJECT_NAME{
             }
         }
 
+
         template<class Struct>
         JSON(Struct* in){
             if(!in){
@@ -285,32 +303,7 @@ namespace PROJECT_NAME{
             }
         }
 
-        /*
-        template<class Struct,class Func>
-        JSON(Func& func,const Struct& in){
-            try{
-                to_json_detail(*this,in,func);
-            }
-            catch(...){
-                type=JSONType::unset;
-            }
-        }
-
-        template<class Struct,class Func>
-        JSON(Func& func,Struct* in){
-            if(!in){
-                type=JSONType::null;
-            }
-            else{
-                try{
-                    to_json_detail(*this,*in,func);
-                }
-                catch(...){
-                    type=JSONType::unset;
-                } 
-            }
-        }*/
-
+        
         JSON(double num){
             type=JSONType::floats;
             numf=num;
@@ -323,9 +316,14 @@ namespace PROJECT_NAME{
         }
 
         JSON(const char* in){
-            type=JSONType::string;
-            auto str=escape(in);
-            value=EasyStr(str.c_str());
+            if(!in){
+                type=JSONType::null;
+            }
+            else{
+                type=JSONType::string;
+                auto str=escape(in);
+                value=EasyStr(str.c_str());
+            }
         }
 
         JSON(JSONObjectType&& json){
@@ -400,9 +398,30 @@ namespace PROJECT_NAME{
         }
         bool parse_assign(const std::string& in);
 
-        std::string to_string(size_t indent=0,bool useskip=false) const;
+        std::string to_string(size_t indent=0,JSONFormat format=JSONFormat::defaultf) const;
 
         bool operator==(const JSON& right){
+            if(this->type==right.type){
+                if(this->type==JSONType::unset||this->type==JSONType::null){
+                    return true;
+                }
+                else if(this->type==JSONType::string){
+                    return this->value.size()==right.value.size()&&
+                    strcmp(this->value.const_str(),right.value.const_str())==0;
+                }
+                else if(this->type==JSONType::integer){
+                    return this->numi==right.numi;
+                }
+                else if(this->type==JSONType::floats){
+                    return this->numf==right.numf;
+                }
+                else if(this->type==JSONType::unsignedi){
+                    return this->numu==right.numu;
+                }
+                else if(this->type==JSONType::boolean){
+                    return this->boolean==right.boolean;
+                }
+            }
             return this->to_string()==right.to_string();
         }
 
@@ -413,4 +432,13 @@ namespace PROJECT_NAME{
     
     using JSONObject=JSON::JSONObjectType;
     using JSONArray=JSON::JSONArrayType;
+
+    template<class Vec>
+    JSON atoj(Vec& in){
+        JSON ret="[]"_json;
+        for(auto& i:in){
+            ret.push_back(i);
+        }
+        return ret;
+    }
 }

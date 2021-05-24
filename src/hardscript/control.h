@@ -37,32 +37,52 @@ namespace control{
         void to_json(PROJECT_NAME::JSON& j)const;
     };
     
+    
     struct Flags{
         bool mustexpect=false;
-        bool syntaxerr=false; 
+        bool syntaxerr=false;
     };
 
-    template<class Buf>
-    bool checker(PROJECT_NAME::Reader<Buf>* self,const char*& expected,int depth,Flags& flag){
-        auto check=[&](auto... args){return PROJECT_NAME::op_expect(self,expected,args...);};
+    template<class Str,class Buf>
+    int checker(PROJECT_NAME::Reader<Buf>* self,Str& expected,int depth,Flags& flag){
+        auto check=[&](auto... args){return (int)PROJECT_NAME::op_expect(self,expected,args...);};
         auto chone=[&](auto& arg){
-            return self->expectp(arg,expected,[&](auto c){return c==arg[0];});
+            return (int)self->expectp(arg,expected,[&](auto c){return c==arg[0];});
+        };
+        auto cast=[&]{
+            auto beginpos=self->readpos();
+            if(self->expect("cast",PROJECT_NAME::is_c_id_usable)){
+                if(!self->expect("<")){
+                    self->seek(beginpos);
+                    return 0;
+                }
+                Str buf;
+                buf.append("cast<");
+                if(!self->readwhile(buf,PROJECT_NAME::until,'>')){
+                    self->seek(beginpos);
+                    return 0;
+                }
+                self->expect(">");
+                expected=std::move(buf);
+                return 1;
+            }
+            return 0;
         };
         switch (depth){
         case 8:
             if(flag.mustexpect){
                 if(check(":")){
                     flag.mustexpect=false;
-                    return true;
+                    return -1;
                 }
                 flag.syntaxerr=true;
-                return false;
+                return 0;
             }
             else if(check("?")){
                 flag.mustexpect=true;
-                return true;
+                return 1;
             }
-            return false;
+            return 0;
         case 7:
             return check("=");
         case 6:
@@ -78,22 +98,26 @@ namespace control{
         case 1:
             return check("*","/","%","<<",">>");
         case 0:
-            return check("++","--","+","-","!","&","*");
+            return check("++","--","+","-","!","&","*")||cast();
         default:
             return false;
         }
     }
 
-    template<class Buf>
+    template<class Buf,class Str=Buf>
     Tree* expr_parse(PROJECT_NAME::Reader<Buf>& reader){
-        PROJECT_NAME::ExampleTree<Tree,TreeKind,Buf,decltype(checker<Buf>),Flags> 
+        PROJECT_NAME::ExampleTree<Tree,Str,TreeKind,Buf,decltype(checker<Str,Buf>),Flags> 
         ctx(checker,8);
-        reader.readwhile(PROJECT_NAME::read_expr,ctx);
+        reader.readwhile(PROJECT_NAME::read_expr<Buf,decltype(ctx),Str>,ctx);
         if(!ctx.result||ctx.flags.syntaxerr){
             delete ctx.result;
             return nullptr;
         }
         return ctx.result;
+    }
+
+    inline Tree* expr(PROJECT_NAME::Reader<std::string>& reader){
+        return expr_parse(reader);
     }
 
     template<class T>
@@ -162,6 +186,7 @@ namespace control{
 
         Control& operator=(Control&& from){
             moving(from);
+            return *this;
         }
         ~Control(){
             delete expr;

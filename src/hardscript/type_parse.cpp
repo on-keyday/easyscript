@@ -72,7 +72,7 @@ bool control::parse_funcarg(PROJECT_NAME::Reader<std::string>& reader,std::vecto
         if(argname!=""&&reader.expect("=")){
             argname+="=";
             auto beginpos=reader.readpos();
-            auto check=expr_parse(reader);
+            auto check=expr(reader);
             if(!check)return false;
             delete check;
             auto endpos=reader.readpos();

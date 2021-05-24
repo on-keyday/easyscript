@@ -10,7 +10,7 @@
 #include"basic_tree.h"
 
 namespace PROJECT_NAME{
-    template<class Tree,class Kind,class Buf,class Checker,class Flags=bool>
+    template<class Tree,class Str,class Kind,class Buf,class Checker,class Flags=bool>
     struct ExampleTree{
         Tree* result=nullptr;
         Checker& check;
@@ -19,7 +19,7 @@ namespace PROJECT_NAME{
 
         ExampleTree(Checker& func,int depth):check(func),depthmax(depth){}
 
-        template<class Str>
+
         Tree* make_tree(Str symbol,Tree*left=nullptr,Tree* right=nullptr,Kind kind=Kind::unknown){
             Tree* ret=nullptr;
             try{
@@ -42,7 +42,7 @@ namespace PROJECT_NAME{
 
 
 
-        bool expect(Reader<Buf>* self,int depth,const char*& expected){
+        int expect(Reader<Buf>* self,int depth,Str& expected){
             return check(self,expected,depth,flags);
         }
 
@@ -140,7 +140,7 @@ namespace PROJECT_NAME{
                         return nullptr;
                     }
                     ret=hold;
-                    auto tmp=expression<Tree>(self,*this);
+                    auto tmp=expression<Tree,Str>(self,*this);
                     if(!tmp||!self->expect("]")){
                         delete tmp;
                         delete ret;
@@ -198,7 +198,7 @@ namespace PROJECT_NAME{
             ret=hold;
             while(true){
                 if(self->expect(end))break;
-                auto tmp=expression<Tree>(self,*this);
+                auto tmp=expression<Tree,Str>(self,*this);
                 if(!tmp||(!self->expect(",")&&!self->ahead(end))){
                     delete tmp;
                     delete ret;

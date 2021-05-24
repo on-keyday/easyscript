@@ -11,6 +11,8 @@
 using namespace PROJECT_NAME;
 using namespace control;
 
+
+
 bool control::parse_all(PROJECT_NAME::Reader<std::string>& reader,std::vector<Control>& vec){
     while(!reader.eof()){
         if(!control_parse(reader,vec))return false;
@@ -68,7 +70,7 @@ bool control::control_parse(Reader<std::string>& reader,std::vector<Control>& ve
         Control ret;
         ret.name="return";
         if(!reader.ahead(";")){
-            if(!(ret.expr=expr_parse(reader)))return false;
+            if(!(ret.expr=expr(reader)))return false;
         }
         if(!reader.expect(";"))return false;
         vec.push_back(std::move(ret));
@@ -89,7 +91,7 @@ bool control::parse_inblock(PROJECT_NAME::Reader<std::string>& reader,std::strin
 
 bool control::parse_expr(PROJECT_NAME::Reader<std::string>& reader,std::vector<Control>& vec,bool semicolon){
     Control ret;
-    auto tree=expr_parse(reader);
+    auto tree=expr(reader);
     if(!tree||(semicolon&&!reader.expect(";"))){
         delete tree;
         return false;
@@ -132,7 +134,7 @@ bool control::parse_var_detail(PROJECT_NAME::Reader<std::string>& reader,std::ve
         if(check){
             bool failed=false;
             do{
-                auto tmp=expr_parse(reader);
+                auto tmp=expr(reader);
                 if(!tmp){
                     failed=true;
                     break;
@@ -175,7 +177,7 @@ bool control::parse_var_detail(PROJECT_NAME::Reader<std::string>& reader,std::ve
 bool control::parse_if(PROJECT_NAME::Reader<std::string>& reader,std::vector<Control>& vec){
     Control ret;
     ret.name="if";
-    auto tree=expr_parse(reader);
+    auto tree=expr(reader);
     if(!tree)return false;
     ret.expr=tree;
     if(!parse_inblock(reader,ret.inblock,ret.inblockpos))return false;
@@ -183,7 +185,7 @@ bool control::parse_if(PROJECT_NAME::Reader<std::string>& reader,std::vector<Con
     while(reader.expect("else",is_c_id_usable)){
         if(reader.expect("if",is_c_id_usable)){
             ret.name="elif";
-            tree=expr_parse(reader);
+            tree=expr(reader);
             if(!tree)return false;
             ret.expr=tree;
             if(!parse_inblock(reader,ret.inblock,ret.inblockpos))return false;
@@ -271,8 +273,62 @@ bool control::parse_for(PROJECT_NAME::Reader<std::string>& reader,std::vector<Co
     return true;
 }
 
+namespace control{
+    void to_json(JSON& to,const CtrlKind& kind){
+        switch (kind)
+        {
+        case CtrlKind::ctrl:
+            to="ctrl";
+            break;
+        case CtrlKind::decl:
+            to="decl";
+            break;
+        case CtrlKind::expr:
+            to="expr";
+            break;
+        case CtrlKind::func:
+            to="func";
+            break;
+        case CtrlKind::var:
+            to="var";
+            break;
+        default:
+            to="unknown";
+            break;
+        }
+    }
+
+    void to_json(JSON& to,const TreeKind& kind){
+        switch (kind)
+        {
+        case TreeKind::boolean:
+            to="bool";
+            break;
+        case TreeKind::integer:
+            to="int";
+            break;
+        case TreeKind::floats:
+            to="float";
+            break;
+        case TreeKind::string:
+            to="string";
+            break;
+        case TreeKind::create:
+            to="new";
+            break;
+        case TreeKind::closure:
+            to="closure";
+            break;
+        default:
+            to="unknown";
+            break;
+        }
+    }
+}
+
+
 void Tree::to_json(JSON& json)const{
-    json["kind"]=(int)kind;
+    json["kind"]=kind;
     json["symbol"]=symbol;
     json["left"]=left;
     json["right"]=right;
@@ -282,7 +338,7 @@ void Tree::to_json(JSON& json)const{
 }
 
 void Control::to_json(JSON& json)const{
-    json["kind"]=(int)kind;
+    json["kind"]=kind;
     json["name"]=name;
     json["expr"]=expr;
     json["type"]=type;

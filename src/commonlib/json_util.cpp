@@ -246,21 +246,33 @@ JSON JSON::parse_json_detail(Reader<const char*>& reader){
     throw "not json";
 }
 
-std::string JSON::to_string(size_t indent,bool useskip) const{
-    auto ret=to_string_detail((bool)indent,1,indent,0,useskip);
-    if(ret.size()&&indent)ret+="\n";
+std::string JSON::to_string(size_t indent,JSONFormat format) const{
+    auto ret=to_string_detail(format,1,indent,0);
+    auto flag=[&format](auto n){
+        return (bool)((unsigned int)format&(unsigned int)n);
+    };
+    if(ret.size()&&flag(JSONFormat::endline))ret+="\n";
     return ret;
 }
 
-std::string JSON::to_string_detail(bool format,size_t ofs,size_t indent,size_t base_skip,bool useskip)const{
-    if(type==JSONType::unset)return "";
+std::string JSON::to_string_detail(JSONFormat format,size_t ofs,size_t indent,size_t base_skip)const{
+    auto flag=[&format](auto n){
+        return (bool)((unsigned int)format&(unsigned int)n);
+    };
+    if(type==JSONType::unset)
+        return "";
     std::string ret;
     bool first=true;
-    auto fmtprint=[format,&useskip,&base_skip,&ret,&indent](size_t ofs,bool line=true){
-        if(!format)return;
-        if(line)ret+="\n";
-        for(auto i=0;i<ofs;i++)for(auto u=0;u<indent;u++)ret+=" ";
-        if(useskip)for(auto i=0;i<base_skip;i++)ret+=" ";
+    auto fmtprint=[&flag,&base_skip,&ret,&indent](size_t ofs){
+        if((indent==0)&&!flag(JSONFormat::mustline))return;
+        ret+="\n";
+        if(flag(JSONFormat::tab)){
+            for(auto i=0;i<ofs;i++)for(auto u=0;u<indent;u++)ret+="\t";
+        }
+        else if(flag(JSONFormat::space)){
+            for(auto i=0;i<ofs;i++)for(auto u=0;u<indent;u++)ret+=" ";
+        }
+        if(flag(JSONFormat::elmpush))for(auto i=0;i<base_skip;i++)ret+=" ";
     };
     if(type==JSONType::object){
         ret+="{";
@@ -274,8 +286,10 @@ std::string JSON::to_string_detail(bool format,size_t ofs,size_t indent,size_t b
             fmtprint(ofs);
             auto adds="\""+kv.first+"\""+":";
             ret+=adds;
-            if(format)ret+=" ";
-            auto tmp=kv.second.to_string_detail(format,ofs+1,indent,base_skip+adds.size()+1,useskip);
+            if((indent&&flag(JSONFormat::afterspace))||flag(JSONFormat::mustspace)){
+                ret+=" ";
+            }
+            auto tmp=kv.second.to_string_detail(format,ofs+1,indent,base_skip+adds.size()+1);
             if(tmp=="")return "";
             ret+=tmp;
         }
@@ -292,7 +306,7 @@ std::string JSON::to_string_detail(bool format,size_t ofs,size_t indent,size_t b
                 ret+=",";
             }
             fmtprint(ofs);
-            auto tmp=kv.to_string_detail(format,ofs+1,indent,base_skip,useskip);
+            auto tmp=kv.to_string_detail(format,ofs+1,indent,base_skip);
             if(tmp=="")return "";
             ret+=tmp;
         }
@@ -409,7 +423,7 @@ JSON* JSON::path(const std::string& p){
             return path_get(key);
         };
 
-        if(reader.ahead("\"")){
+        if(reader.ahead("\"")||reader.ahead("'")){
             if(!reader.string(key,true))return nullptr;
             key.pop_back();
             key.erase(0,1);

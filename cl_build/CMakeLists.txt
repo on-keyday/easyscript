@@ -9,7 +9,7 @@ if(CMAKE_BINARY_DIR STREQUAL CMAKE_SOURCE_DIR)
 message(FATAL_ERROR "in-source-build is not allowed.")
 endif()
 
-set(CMAKE_CXX_FLAGS "/std:c++17 /EHsc")
+set(CMAKE_CXX_FLAGS "/std:c++latest /EHsc /source-charset:utf-8")
 if($ENV{PROJECT_COPY})
 add_subdirectory("./src" ./built)
 else()

@@ -339,68 +339,62 @@ namespace PROJECT_NAME{
             }
         }
 
+        private:
+
+            template<class Func>
+            inline bool readwhile_impl_detail(Func& func,bool usecheckers){
+                ignore();
+                if(!func(this,true))return false;
+                auto ig=set_ignore(nullptr);
+                bool ok=false;
+                while(!endbuf()){
+                    if(func(this,false)){
+                        ok=true;
+                        break;
+                    }
+                    pos++;
+                }
+                if(endbuf()){
+                    auto t=func(nullptr,false);
+                    if(usecheckers)ok=t;
+                }
+                set_ignore(ig);
+                return ok;
+            }
+
+            template<class Ctx,class Ret>
+            bool readwhile_impl1(Ret& ret,bool(*check)(Reader*,Ret&,Ctx&,bool),Ctx& ctx,bool usecheckers){
+                if(!check)return false;
+                auto func=[&](Reader* self,bool flag){
+                    return check(self,ret,ctx,flag);
+                };
+                return readwhile_impl_detail(func,usecheckers);
+            }
+
+            template<class Func,class Ctx>
+            bool readwhile_impl2(Func check,Ctx& ctx,bool usecheckers){
+                if(!check)return false;
+                auto func=[&](Reader* self,bool flag){
+                    return check(self,ctx,flag);
+                };
+                return readwhile_impl_detail(func,usecheckers);
+            }
+
+        public:
+
         template<class Ctx=void*,class Ret>
-        bool readwhile(Ret& ret,bool(*check)(Reader*,Ret&,Ctx&,bool),Ctx ctx=0,bool usecheckres=false){
-            if(!check)return false;
-            ignore();
-            if(!check(this,ret,ctx,true))return false;
-            auto ig=set_ignore(nullptr);
-            bool ok=false;
-            while(!endbuf()){
-                if(check(this,ret,ctx,false)){
-                    ok=true;
-                    break;
-                }
-                pos++;
-            }
-            if(endbuf()){
-                auto t=check(nullptr,ret,ctx,false);
-                if(usecheckres)ok=t;
-            }
-            set_ignore(ig);
-            return ok;
+        bool readwhile(Ret& ret,bool(*check)(Reader*,Ret&,Ctx&,bool),Ctx ctx=0,bool usecheckers=false){
+            return readwhile_impl1(ret,check,ctx,usecheckers);
         }
 
         template<class Ctx>
-        bool readwhile(bool(*check)(Reader*,Ctx&,bool),Ctx& ctx,bool usecheckres=false){
-            if(!check)return false;
-            if(!check(this,ctx,true))return false;
-            auto ig=set_ignore(nullptr);
-            bool ok=false;
-            while(!endbuf()){
-                if(check(this,ctx,false)){
-                    ok=true;
-                    break;
-                }
-                pos++;
-            }
-            if(endbuf()){
-                auto t=check(nullptr,ctx,false);
-                if(usecheckres)ok=t;
-            }
-            set_ignore(ig);
-            return ok;
+        bool readwhile(bool(*check)(Reader*,Ctx&,bool),Ctx& ctx,bool usecheckers=false){
+            return readwhile_impl2(check,ctx,usecheckers);
         }
 
         template<class Ctx>
-        bool readwhile(bool(*check)(Reader*,Ctx,bool),Ctx ctx,bool usecheckres=false){
-            if(!check)return false;
-            if(!check(this,ctx,true))return false;
-            auto ig=set_ignore(nullptr);
-            bool ok=false;
-            while(!endbuf()){
-                if(check(this,ctx,false)){
-                    ok=true;
-                    break;
-                }
-                pos++;
-            }
-            if(endbuf()){
-                auto t=check(nullptr,ctx,false);
-                if(usecheckres)ok=t;
-            }
-            set_ignore(ig);
-            return ok;
+        bool readwhile(bool(*check)(Reader*,Ctx,bool),Ctx ctx,bool usecheckers=false){
+            return readwhile_impl2(check,ctx,usecheckers);
         }
 
 

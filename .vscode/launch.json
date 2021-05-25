@@ -5,7 +5,7 @@
             "name": "(cl_build)",
             "type": "cppvsdbg",
             "request": "launch",
-            "program": "${workspaceFolder}/cl_build/built/built/httpc.exe",
+            "program": "${workspaceFolder}/cl_build/built/built/program.exe",
             "args": [],
             "stopAtEntry": false,
             "cwd": "${workspaceFolder}/cl_build/built/built",

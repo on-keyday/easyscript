@@ -6,9 +6,11 @@
 
 #pragma once 
 #include"reader.h"
+#ifdef _WIN32
+#include<Windows.h>
+#endif
 namespace PROJECT_NAME{
     
-
     inline unsigned char utf8bits(int i){
         const unsigned char maskbits[]={
             //first byte mask
@@ -19,7 +21,7 @@ namespace PROJECT_NAME{
             0b11111000,
             
             //i>=5,second byte later mask
-            0b00011100, //two byte must
+            0b00011110, //two byte must
             0b00001111,0b00100000, //three byte must
             0b00000111,0b00110000, //four byte must
         };
@@ -32,9 +34,12 @@ namespace PROJECT_NAME{
     }
 
     template<class Buf,class Ret>
-    bool utf8_read(Reader<Buf>* self,Ret& ret,int& ctx,bool begin){
+    bool utf8_read(Reader<Buf>* self,Ret& ret,int*& ctx,bool begin){
         static_assert(sizeof(typename Reader<Buf>::char_type)==1);
-        if(begin)return true;
+        if(begin){
+            if(!ctx)return false;
+            return true;
+        }
         if(!self)return true;
         auto r=[&](int ofs=0){
             return (unsigned char)self->offset(ofs);
@@ -52,32 +57,32 @@ namespace PROJECT_NAME{
         else if(mask(2)){
             range=2;
             if(!needbits(0,5)){
-                ctx=1;
+                *ctx=1;
                 return true;
             }
         }
         else if(mask(3)){
             range=3;
             if(!needbits(0,6)&&!needbits(1,7)){
-                ctx=12;
+                *ctx=12;
                 return true;
             }
         }
         else if(mask(4)){
             range=4;
             if(!needbits(0,8)&&!needbits(1,9)){
-                ctx=12;
+                *ctx=12;
             }
         }
         else{
-            ctx=1;
+            *ctx=1;
             return true;
         }
         for(auto i=0;i<range;i++){
             if(i){
                 self->increment();
                 if(!mask(1)){
-                    ctx=i+1;
+                    *ctx=i+1;
                     return true;
                 }
             }
@@ -87,31 +92,25 @@ namespace PROJECT_NAME{
     }
 
     template<class Buf,class Str>
-    char32_t utf8toutf32_impl(Reader<Buf>* self,int& err){
-        int errpos=0;
+    char32_t utf8toutf32_impl(Reader<Buf>* self,int*& ctx){
         Str buf;
-        utf8_read(self,buf,errpos,false);
-        if(errpos){
-            ctx=errpos;
-            return true;
-        }
-        using Char32=remove_cv_ref<decltype(ret[0])>;
+        utf8_read(self,buf,ctx,false);
+        if(*ctx)return 0;
         auto len=(int)buf.size();
         if(len==1){
             return (char32_t)buf[0];
         }
-        Char32 c=0;
         auto maskbit=[](int i){
             return ~utf8bits(i);
         };
         auto make=[&maskbit,&buf,&len](){
-            Char32 ret=0;
+            char32_t ret=0;
             for(int i=0;i<len;i++){
                 auto mul=(len-i-1);
                 auto shift=6*mul;
                 unsigned char masking=0;
                 if(i==0){
-                    masking=buf[i]&maskbit(len);
+                    masking=buf[i]&maskbit(len-1);
                 }
                 else {
                     masking=buf[i]&maskbit(1);
@@ -124,23 +123,29 @@ namespace PROJECT_NAME{
     }
 
     template<class Buf,class Ret,class Str=Buf>
-    bool utf8toutf32(Reader<Buf>* self,Ret& ret,int& ctx,bool begin){
+    bool utf8toutf32(Reader<Buf>* self,Ret& ret,int*& ctx,bool begin){
         static_assert(sizeof(typename Reader<Buf>::char_type)==1);
         static_assert(sizeof(ret[0])==4);
-        if(begin)return true;
+        if(begin){
+            if(!ctx)return false;
+            return true;
+        }
         if(!self)return true;
-        auto c=utf8toutf32_impl(self,ctx);
-        if(ctx)return true;
+        auto c=utf8toutf32_impl<Buf,Str>(self,ctx);
+        if(*ctx)return true;
         ret.push_back(c);
         return false;
     }
 
     template<class Buf,class Ret>
-    bool utf32toutf8(Reader<Buf>* self,Ret& ret,int& ctx,bool begin){
+    bool utf32toutf8(Reader<Buf>* self,Ret& ret,int*& ctx,bool begin){
         static_assert(sizeof(typename Reader<Buf>::char_type)==4);
         static_assert(sizeof(ret[0])==1);
         using Char8=remove_cv_ref<decltype(ret[0])>;
-        if(begin)return true;
+        if(begin){
+            if(!ctx)return false;
+            return true;
+        }
         if(!self)return true;
         unsigned int C=self->achar();
         auto push=[&ret,C](int len){
@@ -171,20 +176,14 @@ namespace PROJECT_NAME{
             push(4);
         }
         else{
-            ctx=C;
+            *ctx=C;
             return true;
         }
         return false;
     }
 
-
-    template<class Buf,class Ret>
-    bool utf16toutf32(Reader<Buf>* self,Ret& ret,int& ctx,bool begin){
-        static_assert(sizeof(typename Reader<Buf>::char_type)==2);
-        static_assert(sizeof(ret[0])==4);
-        if(begin)return true;
-        if(!self)return true;
-        int errpos=0;
+    template<class Buf>
+    char32_t utf16toutf32_impl(Reader<Buf>* self,int*& ctx){
         auto C=self->achar();
         auto hi=[&C]{
             return 0xD800<=C&&C<=0xDC00;
@@ -197,14 +196,148 @@ namespace PROJECT_NAME{
             self->increment();
             C=self->achar();
             if(!low()){
-                ctx=2;
+                *ctx=2;
                 return true;
             }
-            ret.push_back(0x10000 + (first - 0xD800) * 0x400 +(C- 0xDC00));
+            uint32_t S=0x10000 + (first - 0xD800) * 0x400 +(C- 0xDC00);
+            return S;
         }
         else{
-            ret.push_back(C);
+            return C;
+        }
+    }
+
+
+    template<class Buf,class Ret>
+    bool utf16toutf32(Reader<Buf>* self,Ret& ret,int*& ctx,bool begin){
+        static_assert(sizeof(typename Reader<Buf>::char_type)==2);
+        static_assert(sizeof(ret[0])==4);
+        if(begin){
+            if(!ctx)return false;
+            return true;
+        }
+        if(!self)return true;
+        auto C=utf16toutf32_impl(self,ctx);
+        if(*ctx)return true;
+        ret.push_back(C);
+        return false;
+    }
+
+
+
+    template<class Buf,class Ret>
+    bool utf32toutf16(Reader<Buf>* self,Ret& ret,int*& ctx,bool begin){
+        static_assert(sizeof(typename Reader<Buf>::char_type)==4);
+        static_assert(sizeof(ret[0])==2);
+        if(begin){
+            if(!ctx)return false;
+            return true;
+        }
+        if(!self)return true;
+        auto C=self->achar();
+        if (C < 0 || C > 0x10FFFF) {
+            *ctx=1;
+            return true;
+        }
+        if(C<0x100000){
+            ret.push_back((char16_t)C);
+        }
+        else{
+            auto first = char16_t((C - 0x10000) / 0x400 + 0xD800);
+            auto second = char16_t((C - 0x10000) % 0x400 + 0xDC00);
+            ret.push_back(first);
+            ret.push_back(second);
         }
         return false;
     }
+
+    template<class Buf,class Ret,class Str=Buf>
+    bool utf8toutf16(Reader<Buf>* self,Ret& ret,int*& ctx,bool begin){
+        static_assert(sizeof(typename Reader<Buf>::char_type)==1);
+        static_assert(sizeof(ret[0])==2);
+        if(begin){
+            if(!ctx)return false;
+            return true;
+        }
+        if(!self)return true;
+        auto C=utf8toutf32_impl<Buf,Str>(self,ctx);
+        if(*ctx)
+            return true;
+        if(C==0){
+            ret.push_back(C);
+            return true;
+        }
+        char32_t buf[]={C,0};
+        Reader<char32_t*> read((char32_t*)buf);
+        read.readwhile(ret,utf32toutf16,ctx);
+        if(*ctx)return true;
+        return false;
+    }
+
+    template<class Buf,class Ret>
+    bool utf16toutf8(Reader<Buf>* self,Ret& ret,int*& ctx,bool begin){
+        static_assert(sizeof(typename Reader<Buf>::char_type)==2);
+        static_assert(sizeof(ret[0])==1);
+        if(begin){
+            if(!ctx)return false;
+            return true;
+        }
+        if(!self)return true;
+        auto C=utf16toutf32_impl(self,ctx);
+        if(*ctx)return true;
+        if(C==0){
+            ret.push_back(C);
+            return true;
+        }
+        char32_t buf[]={C,0};
+        Reader<char32_t*> read(buf);
+        read.readwhile(ret,utf32toutf8,ctx);
+        if(*ctx)return true;
+        return false;
+    }
+
+#ifdef _WIN32
+
+    template<class Buf,class Ret,class Str=Buf>
+    bool sjistoutf16(Reader<Buf>* self,Ret& ret,int*& ctx,bool begin){
+        static_assert(sizeof(typename Reader<Buf>::char_type)==1);
+        static_assert(sizeof(ret[0])==2);
+        if(begin){
+            if(!ctx)return false;
+            return true;
+        }
+        if(!self)return true;
+        unsigned char C=self->achar();
+        wchar_t result[]={0,0,0};
+        int res=0;
+        if(C<0x80||(0xa0<C&&C<0xe0)){
+            unsigned char buf[]={C};
+            res=MultiByteToWideChar(932,MB_PRECOMPOSED,(char*)buf,1,result,3);
+            if(res==0){
+                *ctx=1;
+                return true;
+            }
+        }
+        else if(0x80<C&&C<0xa0||0xe0<=C&&C<0xfd){
+            auto first=C;
+            self->increment();
+            C=self->achar();
+            if(!(0x40<=C&&C<0x7f||0x80<=C&&C<0xfd)){
+                *ctx=2;
+                return true;
+            }
+            unsigned char buf[]={first,C};
+            res=MultiByteToWideChar(932,MB_PRECOMPOSED,(char*)buf,2,result,3);
+            if(res==0){
+                *ctx=2;
+                return true;
+            }
+        }
+        for(auto i=0;i<res;i++){
+            ret.push_back(result[i]);
+        }
+        return false;
+    }
+#endif
+
 }

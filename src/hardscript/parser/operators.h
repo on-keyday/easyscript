@@ -136,7 +136,7 @@ namespace node{
         CASE_LAB_OPS_TO_STR_NODE(op_bor,"|")
         if(has_left)CASE_LAB_OPS_TO_STR_NODE(op_band,"&")
         CASE_LAB_OPS_TO_STR_NODE(op_bxor,"^")
-        CASE_LAB_OPS_TO_STR_NODE(op_cast,"cast")
+        if(str[0]=='c'&&str[1]=='a'&&str[2]=='s'&&str[4]=='t')return NodeKind::op_cast;
         CASE_LAB_OPS_TO_STR_NODE(op_cond,"?:")
         CASE_LAB_OPS_TO_STR_NODE(op_equ,"==")
         CASE_LAB_OPS_TO_STR_NODE(op_neq,"!=")

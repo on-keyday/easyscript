@@ -3,10 +3,10 @@ using namespace PROJECT_NAME;
 #include<fstream>
 #include<iostream>
 
-std::ofstream data("./sent.h2f",std::ios::binary);
+//std::ofstream data("./sent.h2f",std::ios::binary);
 
 bool HTTP2FrameLayer::send(const std::string& buf){
-    data<< ":sep:" <<buf;
+    //data<< ":sep:" <<buf;
     return sock.send(buf);
 }
 

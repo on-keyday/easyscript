@@ -166,20 +166,20 @@ namespace PROJECT_NAME{
     public:
         using char_type=Char;
         using buf_type=Buf;
-        Reader(Reader&)=delete;
+        Reader(const Reader&)=delete;
         Reader(Reader&&)=delete;
 
-        Reader(IgnoreHandler cb=nullptr){
+        Reader(IgnoreHandler cb=nullptr):buf(Buf()){
             ignore_cb=cb;
         }
 
-        Reader(Buf& in,IgnoreHandler cb=nullptr){
-            buf=in;
+        Reader(const Buf& in,IgnoreHandler cb=nullptr):buf(in){
+            //buf=in;
             ignore_cb=cb;
         }
 
-        Reader(Buf&& in,IgnoreHandler cb=nullptr){
-            buf=std::move(in);
+        Reader(Buf&& in,IgnoreHandler cb=nullptr)noexcept:buf(std::move(in)){
+            //buf=std::move(in);
             ignore_cb=cb;
         }
 
@@ -362,8 +362,8 @@ namespace PROJECT_NAME{
                 return ok;
             }
 
-            template<class Ctx,class Ret>
-            bool readwhile_impl1(Ret& ret,bool(*check)(Reader*,Ret&,Ctx&,bool),Ctx& ctx,bool usecheckers){
+            template<class Ctx,class Ret,class Func>
+            bool readwhile_impl1(Ret& ret,Func check,Ctx& ctx,bool usecheckers){
                 if(!check)return false;
                 auto func=[&](Reader* self,bool flag){
                     return check(self,ret,ctx,flag);

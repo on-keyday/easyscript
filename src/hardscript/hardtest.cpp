@@ -6,134 +6,152 @@
 
 #define DLL_EXPORT __declspec(dllexport)
 #include"hardtest.h"
-#include"control.h"
-#include"../commonlib/json_util.h"
-#include"../commonlib/utf_helper.h"
+#include"parser/control.h"
+#include<json_util.h>
+#include<basic_helper.h>
+#include<fileio.h>
+#include"parser/node.h"
 #include<iostream>
 #include<fstream>
+#include<iterator>
+#include<memory>
+#include<assert.h>
+
 using namespace PROJECT_NAME;
+using namespace node;
 using namespace control;
-/*
-namespace PROJECT_NAME{
-    void to_json(JSON& to,const std::filesystem::perms& permission){
-        using perms=std::filesystem::perms;
-        unsigned int flag=(unsigned int)permission;
-        auto others=flag&(unsigned int)perms::others_all;
-        auto group=flag&(unsigned int)perms::group_all;
-        auto owner=flag&(unsigned int)perms::owner_all;
-        group>>=3;
-        owner>>=6;
-        to["owner"]=owner;
-        to["group"]=group;
-        to["others"]=others;
+
+struct Input{
+private:
+    std::string buffer;
+    bool exited=false;
+public:
+    bool noread=false;
+    char operator[](size_t pos) const{
+        if(exited)return char();
+        return buffer[pos];
     }
 
-    void to_json(JSON& to,const std::filesystem::file_type& type){
-        using filetype=std::filesystem::file_type;
-        switch (type)
-        {
-        case filetype::block:
-            to="block";
-            break;
-        case filetype::character:
-            to="character";
-            break;
-        case filetype::fifo:
-            to="fifo";
-            break;
-        case filetype::junction:
-            to="junction";
-            break;
-        case filetype::none:
-            to="none";
-            break;
-        case filetype::not_found:
-            to="not_found";
-            break;
-        case filetype::regular:
-            to="regular";
-            break;
-        case filetype::socket:
-            to="socket";
-            break;
-        case filetype::symlink:
-            to="symlink";
-            break;
-        default:
-            to="unknown";
-            break;
-        }
-    }
-
-    void to_json(JSON& to,const std::filesystem::path& dir){
-        std::filesystem::directory_iterator it(dir),end;
-        std::error_code code;
-        to="{}"_json;
-        for(;it!=end&&!code;it.increment(code)){
-            auto& file=*it;
-            auto name=file.path().filename().u8string();;
-            auto& ref=to[name];
-            if(file.is_directory()){
-                ref=file;
+    char operator[](size_t pos){
+        size_t line=0;
+        while(!noread&&!exited&&pos>=buffer.size()-line){
+            std::cout << ">>>";
+            std::string tmp;
+            std::getline(std::cin,tmp);
+            if(tmp=="exit"){
+                exited=true;
             }
             else{
-                ref["filetype"]=file.status().type();
-                ref["size"]=file.file_size();
-                ref["permissins"]=file.status().permissions();
+                buffer+=tmp+"\n";
+                line++;
             }
         }
-        if(code){
-            to=JSON();
-        }
+        if(exited)return char();
+        return buffer[pos];
     }
 
-}*/
+    bool clear(){
+        buffer="";
+        noread=false;
+        return true;
+    }
 
+    size_t size()const{
+        return exited?0:noread?buffer.size():buffer.size()+1;
+    }
 
+    bool exit(){
+        return exited;
+    }
+};
+
+void interpret1(){
+    std::string filename;
+    while(true){
+        Reader<std::string> cmdline(ignore_space);
+        std::cout << ">>>";
+        std::getline(std::cin,cmdline.ref());
+        std::cin.clear();
+        if(cmdline.expect("exit",is_c_id_usable)){
+            break;
+        }
+        else if(cmdline.expect("clear",is_c_id_usable)){
+            ::system("cls");
+        }
+        else if(cmdline.expect("file",is_c_id_usable)){
+            std::string tmp;
+            int res;
+            cmdline.readwhile(tmp,cmdline_read,&res);
+            if(res==0){
+                std::cout << "invalid argument\n";
+                continue;
+            }
+            else if(res<0){
+                tmp.erase(0,1);
+                tmp.pop_back();
+            }
+            filename=tmp;
+            std::cout << "file " << filename << " set\n";
+        }
+        else if(cmdline.expect("run")){
+            std::ifstream input(filename);
+            if(!input.is_open()){
+                std::cout << "file " << filename << " not opened\n";
+            }
+            else{
+                Reader<std::string> read(ignore_c_comments);
+                read.ref()=std::string(std::istreambuf_iterator<char>(input),
+                                       std::istreambuf_iterator<char>());
+                                       input.close();
+                NodesT globalvec;
+                auto t=parse_all(read,globalvec);
+                if(t){
+                    std::cout << "valid\n";
+                    std::cout << JSON(globalvec).to_string();
+                }
+                else{
+                    LinePosContext ctx;
+                    read.readwhile(linepos,ctx);
+                    std::cout << "invalid at (" << ctx.line+1 << "," << ctx.pos+1 << ")\n";
+                }
+            }
+        }
+        else{
+            std::cout << "unknown command:" << cmdline.ref() << "\n";
+        }
+        
+    }
+}
 
 int STDCALL hardtest(){
-    const char* code=
-R"(
-    decl printf(string,...)->int @(cdecl);
-    //decl call([]string)->int;
-    func main(argv string...)  {
-        if argv.len() < 1 {
-            return 0;
+    auto json=R"(
+        {
+            "kindnum":1,
+            "symbol":"if",
+            "cond":{
+                "kindnum":0,
+                "symbol":"true"
+            },
+            "blockpos":0,
+            "block":[
+                {
+                    "kindnum":1,
+                    "symbol":"calcable"
+                }
+            ]
         }
-        printf(argv[0]);
-        return $$;
-    }
+    )"_json;
 
-    /*
-    call:=main("aho","hage");
+    FileInput(R"(D:\CommonLib\CommonLib2\garbage\test.json)");
 
-    a:=[0,1,2,3,4][4];
+    Reader<ThreadSafe<FileInput>> fp;
 
-    call();*/
+    json["test"].parse_assign(fp);
+
+    auto& obj=fp.ref().get();
+    obj.close();
+    fp.ref().release(obj);
     
-    decl RunFunctionOnThread(*void,...);
 
-    func th(f,arg ...){
-        return RunFunctionOnThread(f,arg);
-    }
-    return num<=1?num:$$(num-1)+$$(num-2)?true:false;
-    th($(num){
-        return num<=1?num:$$(num-1)+$$(num-2);
-    },20);
-    i()()();
-)";
-    Reader<std::string> test(code,ignore_c_comments);
-    std::vector<Control> globalvec;
-    auto t=parse_all(test,globalvec);
-    LinePosContext ctx;
-    test.readwhile(linepos,ctx);
-    auto json=JSON(globalvec);
-    std::ofstream fs("dump.js");
-    fs << "const obj=";
-    fs << json.to_string(0,JSONFormat::noendline);
-    fs << ";\n";
-    fs << "console.log(obj);";
-    std::ofstream("dump.json") << json.to_string(4);
-    
     return 0;
 }

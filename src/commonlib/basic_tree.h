@@ -26,7 +26,7 @@ namespace PROJECT_NAME{
         if(flag>0){
             tmp=primary<Tree>(self,ctx);
         }
-        else if(ctx.expect(self,-1,expected)){
+        else if(flag<0){
             tmp=unary<Tree,Str>(self,ctx);
         }
         else{
@@ -74,7 +74,7 @@ namespace PROJECT_NAME{
     }
 
     template<class Buf,class Ctx,class Str=Buf>
-    bool read_expr(Reader<Buf>* self,Ctx& ctx,bool begin){
+    bool read_bintree(Reader<Buf>* self,Ctx& ctx,bool begin){
         using Tree=std::remove_pointer_t<remove_cv_ref<decltype(ctx.result)>>;
         if(!begin)return true;
         if(!self)return true;
@@ -82,25 +82,26 @@ namespace PROJECT_NAME{
         return false;
     }
 
+    template<class Buf,class Str,class NExp>
+    bool op_expect(Reader<Buf>*,Str&,NExp&&){return false;}
 
-    template<class Buf,class Str,class... OP>
-    bool op_expect2(Reader<Buf>* self,Str& expected,OP... op){
-        using swallow = std::initializer_list<int>;
-        bool res=false;
-        (void)swallow{ (void( res=res||self->expectp(op,expected) ), 0)... };
-        return res;
+    template<class Buf,class Str,class NExp,class First,class... Other>
+    bool op_expect(Reader<Buf>* self,Str& expected,NExp&& nexp,First first,Other... other){
+        return self->expectp(first,expected,nexp)||op_expect(self,expected,nexp,other...);
     }
 
-
-    template<class Buf,class Str>
-    bool op_expect(Reader<Buf>*,Str&){return false;}
-
-    template<class Buf,class Str,class First,class... Other>
-    bool op_expect(Reader<Buf>* self,Str& expected,First first,Other... other){
-        return self->expectp(first,expected)||op_expect(self,expected,other...);
-        //return op_expect2(self,expected,first,other...);
+    template<class Buf,class Str,class... Arg>
+    bool op_expect_default(Reader<Buf>* self,Str& expected,Arg... arg){
+        return op_expect(self,expected,nullptr,arg...);
     }
 
-    
+    template<class Buf,class Str,class NExp>
+    bool op_expect_one(Reader<Buf>*,Str&,NExp&&){return false;}    
 
+    template<class Buf,class Str,class NExp,class First,class... Other>
+    bool op_expect_one(Reader<Buf>* self,Str& expected,NExp&& func,First first,Other... other){
+        return self->expectp(first,expected,[&](auto c){
+            return c==first[0]||func(c);
+        })||op_expect_one(self,expected,func,other...);
+    }
 }

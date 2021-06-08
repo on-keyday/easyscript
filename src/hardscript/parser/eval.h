@@ -1,7 +1,9 @@
 #include<cstdint>
+#include<operators.h>
 namespace eval{
-    template<class Node,class Kind>
-    Kind is_const(Node* n){
+    template<class Node>
+    node::NodeKind is_const(Node* n){
+        using Kind=node::NodeKind;
         switch (n->kind)
         {
         case Kind::integer:
@@ -9,14 +11,12 @@ namespace eval{
         case Kind::string:
         case Kind::floats:
             return n->kind;
-        case Kind::unknown:{
+        default:{
             auto& s=n->symbol;
             if(n->left&&n->right){
                 
             }
         }
-        default:
-            break;
         }
         return Kind::unknown;
     }

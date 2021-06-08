@@ -11,6 +11,28 @@
 #include<string>
 namespace PROJECT_NAME{
 
+    template<class Buf>
+    struct Reference{
+        Buf& buf;
+        Buf* operator->(){
+            return &buf;
+        }
+
+        decltype(buf[0]) operator[](size_t s)const{
+            return buf[s];
+        }
+
+        decltype(buf[0]) operator[](size_t s){
+            return buf[s];
+        }
+
+        size_t size()const{
+            return buf.size();
+        }
+        Reference(Reference&& in):buf(in.buf){}
+        Reference(Buf& in):buf(in){}
+    };
+
     template<class Char>
     struct NumberContext{
         int radix=0;

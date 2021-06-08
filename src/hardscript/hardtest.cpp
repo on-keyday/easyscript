@@ -142,16 +142,12 @@ int STDCALL hardtest(){
         }
     )"_json;
 
-    FileInput(R"(D:\CommonLib\CommonLib2\garbage\test.json)");
-
-    Reader<ThreadSafe<FileInput>> fp;
-
-    json["test"].parse_assign(fp);
-
-    auto& obj=fp.ref().get();
-    obj.close();
-    fp.ref().release(obj);
+    FileInput fp(R"(D:\CommonLib\CommonLib2\garbage\test.json)");
+    Reader<ThreadSafe<FileInput&>> ps(fp);
+    auto& f=ps.ref().get();
     
-
+    ps.ref().release(f);
+    json["test"].parse_assign(ps);
+    
     return 0;
 }

@@ -59,13 +59,11 @@ namespace PROJECT_NAME{
             open(filename);
         }
 
-        FileInput(FILE* fp){
-            set_fp(fp);
-        }
 
         ~FileInput(){
             close();
         }
+
 
 
         bool set_fp(FILE* fp){
@@ -95,6 +93,7 @@ namespace PROJECT_NAME{
             size_cache=0;
             got_size=false;
             prevpos=0;
+            samepos_cache=0;
             return true;
         }
 
@@ -141,16 +140,17 @@ namespace PROJECT_NAME{
         }
     };
 
-    template<class Buf>
+    template<class Buf,class Mutex=std::mutex>
     struct ThreadSafe{
     private:
         Buf buf;
-        mutable std::mutex lock;
+        mutable Mutex lock;
     public:
 
         ThreadSafe():buf(Buf()){}
+        ThreadSafe(ThreadSafe&& in):buf(std::forward<Buf>(in.buf)){}
         ThreadSafe(const Buf&)=delete;
-
+        ThreadSafe(Buf&& in):buf(std::forward<Buf>(in)){}
         
 
         Buf& get(){
@@ -183,13 +183,16 @@ namespace PROJECT_NAME{
 
     };
 
-    template<class Buf>
-    struct ThreadSafe<Buf&>{
+    
+    template<class Buf,class Mutex>
+    struct ThreadSafe<Buf&,Mutex>{
     private:
-        Buf& buf;
-        mutable std::mutex lock;
+        using INBuf=std::remove_reference_t<Buf>;
+        INBuf& buf;
+        mutable Mutex lock;
     public:
-        ThreadSafe(Buf& buf):buf(buf){}
+        ThreadSafe(ThreadSafe&& in):buf(in.buf){}
+        ThreadSafe(INBuf& in):buf(in){}
 
         Buf& get(){
             lock.lock();

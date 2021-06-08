@@ -178,10 +178,11 @@ namespace PROJECT_NAME{
             ignore_cb=cb;
         }
 
-        Reader(Buf&& in,IgnoreHandler cb=nullptr)noexcept:buf(std::move(in)){
+        Reader(Buf&& in,IgnoreHandler cb=nullptr)noexcept:buf(std::forward<Buf>(in)){
             //buf=std::move(in);
             ignore_cb=cb;
         }
+
 
         template<class Str,class NotExpect=not_expect_default,class Cmp=cmp_default>
         size_t ahead(Str& str,NotExpect not_expect=NotExpect(),Cmp cmp=default_cmp){

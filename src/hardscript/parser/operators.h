@@ -3,6 +3,7 @@
 namespace node{
 
     enum class NodeKind {
+        //unknown
         unknown,
 
         //object
@@ -48,16 +49,124 @@ namespace node{
         op_cond, //a ? b : c
         op_equ, //a == b
         op_neq, //a != b
+        op_lgr, //a > b
+        op_llr, //a < b
+        op_lger, //a <= b
+        op_ller, //a >= b
         op_rsh, //a >> b
         op_lsh, //a << b
         op_call, //a()
+        op_access, //a[b]
+        op_block, //{}
         op_incr, //a++ ++a
         op_decr, //a-- --a
         op_dref, //*a
         op_addr, //&a
-        op_assign, //a=b
-        op_init, //a:=b
+        op_assign, //a = b
+        op_add_assign, //a += b
+        op_sub_assign, //a -= b
+        op_mul_assign, //a *= b
+        op_div_assign, //a /= b
+        op_mod_assign, //a %= b
+        op_band_assign, //a &= b
+        op_bor_assign, //a |= b
+        op_bxor_assign, //a ^= b
+        op_init, //a := b
     };
+
+
+    inline const char* operator_to_str(NodeKind kind){
+#define CASE_LAB_OPS_TO_STR_NODE(x,s) case NodeKind::x:return s;
+        switch (kind)
+        {
+        CASE_LAB_OPS_TO_STR_NODE(op_add,"+")
+        CASE_LAB_OPS_TO_STR_NODE(op_sub,"-")
+        CASE_LAB_OPS_TO_STR_NODE(op_mul,"*")
+        CASE_LAB_OPS_TO_STR_NODE(op_div,"/")
+        CASE_LAB_OPS_TO_STR_NODE(op_mod,"%")
+        CASE_LAB_OPS_TO_STR_NODE(op_lor,"||")
+        CASE_LAB_OPS_TO_STR_NODE(op_land,"&&")
+        CASE_LAB_OPS_TO_STR_NODE(op_bor,"|")
+        CASE_LAB_OPS_TO_STR_NODE(op_band,"&")
+        CASE_LAB_OPS_TO_STR_NODE(op_bxor,"^")
+        CASE_LAB_OPS_TO_STR_NODE(op_cast,"cast")
+        CASE_LAB_OPS_TO_STR_NODE(op_cond,"?:")
+        CASE_LAB_OPS_TO_STR_NODE(op_equ,"==")
+        CASE_LAB_OPS_TO_STR_NODE(op_neq,"!=")
+        CASE_LAB_OPS_TO_STR_NODE(op_lgr,">")
+        CASE_LAB_OPS_TO_STR_NODE(op_llr,"<")
+        CASE_LAB_OPS_TO_STR_NODE(op_lger,">=")
+        CASE_LAB_OPS_TO_STR_NODE(op_ller,"<=")
+        CASE_LAB_OPS_TO_STR_NODE(op_lsh,"<<")
+        CASE_LAB_OPS_TO_STR_NODE(op_rsh,">>")
+        CASE_LAB_OPS_TO_STR_NODE(op_call,"()")
+        CASE_LAB_OPS_TO_STR_NODE(op_access,"[]")
+        CASE_LAB_OPS_TO_STR_NODE(op_block,"{}")
+        CASE_LAB_OPS_TO_STR_NODE(op_incr,"++")
+        CASE_LAB_OPS_TO_STR_NODE(op_decr,"--")
+        CASE_LAB_OPS_TO_STR_NODE(op_dref,"*")
+        CASE_LAB_OPS_TO_STR_NODE(op_addr,"&")
+        CASE_LAB_OPS_TO_STR_NODE(op_assign,"=")
+        CASE_LAB_OPS_TO_STR_NODE(op_add_assign,"+=")
+        CASE_LAB_OPS_TO_STR_NODE(op_sub_assign,"-=")
+        CASE_LAB_OPS_TO_STR_NODE(op_mul_assign,"*=")
+        CASE_LAB_OPS_TO_STR_NODE(op_div_assign,"/=")
+        CASE_LAB_OPS_TO_STR_NODE(op_mod_assign,"%=")
+        CASE_LAB_OPS_TO_STR_NODE(op_band_assign,"&=")
+        CASE_LAB_OPS_TO_STR_NODE(op_bor_assign,"|=")
+        CASE_LAB_OPS_TO_STR_NODE(op_bxor_assign,"^=")
+        CASE_LAB_OPS_TO_STR_NODE(op_init,":=")
+        default:return "";
+        }
+    }
+
+#undef CASE_LAB_OPS_TO_STR_NODE
+
+
+    template<class String>
+    NodeKind str_to_nodekind(const String& str,bool has_left){
+#define CASE_LAB_OPS_TO_STR_NODE(n,s) if(str==s){return NodeKind::n}
+        CASE_LAB_OPS_TO_STR_NODE(op_add,"+")
+        CASE_LAB_OPS_TO_STR_NODE(op_sub,"-")
+        if(has_left)CASE_LAB_OPS_TO_STR_NODE(op_mul,"*")
+        CASE_LAB_OPS_TO_STR_NODE(op_div,"/")
+        CASE_LAB_OPS_TO_STR_NODE(op_mod,"%")
+        CASE_LAB_OPS_TO_STR_NODE(op_lor,"||")
+        CASE_LAB_OPS_TO_STR_NODE(op_land,"&&")
+        CASE_LAB_OPS_TO_STR_NODE(op_bor,"|")
+        if(has_left)CASE_LAB_OPS_TO_STR_NODE(op_band,"&")
+        CASE_LAB_OPS_TO_STR_NODE(op_bxor,"^")
+        CASE_LAB_OPS_TO_STR_NODE(op_cast,"cast")
+        CASE_LAB_OPS_TO_STR_NODE(op_cond,"?:")
+        CASE_LAB_OPS_TO_STR_NODE(op_equ,"==")
+        CASE_LAB_OPS_TO_STR_NODE(op_neq,"!=")
+        CASE_LAB_OPS_TO_STR_NODE(op_lgr,">")
+        CASE_LAB_OPS_TO_STR_NODE(op_llr,"<")
+        CASE_LAB_OPS_TO_STR_NODE(op_lger,">=")
+        CASE_LAB_OPS_TO_STR_NODE(op_ller,"<=")
+        CASE_LAB_OPS_TO_STR_NODE(op_lsh,"<<")
+        CASE_LAB_OPS_TO_STR_NODE(op_rsh,">>")
+        CASE_LAB_OPS_TO_STR_NODE(op_call,"()")
+        CASE_LAB_OPS_TO_STR_NODE(op_access,"[]")
+        CASE_LAB_OPS_TO_STR_NODE(op_block,"{}")
+        CASE_LAB_OPS_TO_STR_NODE(op_incr,"++")
+        CASE_LAB_OPS_TO_STR_NODE(op_decr,"--")
+        CASE_LAB_OPS_TO_STR_NODE(op_dref,"*")
+        CASE_LAB_OPS_TO_STR_NODE(op_addr,"&")
+        CASE_LAB_OPS_TO_STR_NODE(op_assign,"=")
+        CASE_LAB_OPS_TO_STR_NODE(op_add_assign,"+=")
+        CASE_LAB_OPS_TO_STR_NODE(op_sub_assign,"-=")
+        CASE_LAB_OPS_TO_STR_NODE(op_mul_assign,"*=")
+        CASE_LAB_OPS_TO_STR_NODE(op_div_assign,"/=")
+        CASE_LAB_OPS_TO_STR_NODE(op_mod_assign,"%=")
+        CASE_LAB_OPS_TO_STR_NODE(op_band_assign,"&=")
+        CASE_LAB_OPS_TO_STR_NODE(op_bor_assign,"|=")
+        CASE_LAB_OPS_TO_STR_NODE(op_bxor_assign,"^=")
+        CASE_LAB_OPS_TO_STR_NODE(op_init,":=")
+        return NodeKind::unknown;
+    }
+
+#undef CASE_LAB_OPS_TO_STR_NODE
 
     template<class Tree,class Buf,class Recall,class Error,class Str=Buf>
     struct Check{
@@ -97,17 +206,7 @@ namespace node{
                 }
             }
             return NodeKind::unknown;
-            if(!left&&right){
-                if(e("()")){
-                    return NodeKind::op_call;
-                }
-                else if(e("++")){
-                    return NodeKind::op_incr;
-                }
-                else if(e("--")){
-                    return NodeKind::op_decr;
-                }
-            }
+            
             return NodeKind::unknown;
         }
         

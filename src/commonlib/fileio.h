@@ -10,6 +10,7 @@
 #include<Windows.h>
 #elif defined(__linux__)
 #include<sys/mman.h>
+#include <fcntl.h>
 #else
     #error "unsurpported platform"
 #endif

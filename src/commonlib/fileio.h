@@ -28,7 +28,7 @@
 #define COMMONLIB_FILEIO_FUNC_FSEEK ::_fseeki64
 #define COMMONLIB_FILEIO_FSEEK_CAST(x) (long long)(x)
 #else
-#define fopen_s(pfp,filename,mode) ((*pfp)=fopen(filename.mode))
+#define fopen_s(pfp,filename,mode) ((*pfp)=fopen(filename,mode))
 #define COMMONLIB_FILEIO_STRUCT_STAT struct stat
 #define COMMONLIB_FILEIO_FUNC_FSTAT ::fstat
 #define COMMONLIB_FILEIO_FUNC_FSEEK ::fseek

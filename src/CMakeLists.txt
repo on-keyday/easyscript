@@ -4,6 +4,8 @@
 if(WIN32)
 include_directories("D:\\OpenSSL\\build-x64-debug\\include")
 link_directories("D:\\OpenSSL\\build-x64-debug\\lib")
+else()
+find_package(OPENSSL)
 endif()
 include_directories("commonlib")
 add_executable(httpc "httpc.cpp" )

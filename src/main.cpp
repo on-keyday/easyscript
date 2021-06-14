@@ -11,7 +11,7 @@
 #include<map>
 #include<iostream>
 #include"easyscript/script.h"
-//#include"hardscript/hardtest.h"
+#include"hardscript/hardtest.h"
 #include"bunkai/ast.h"
 #include<fileio.h>
 

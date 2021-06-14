@@ -14,7 +14,6 @@ namespace ast{
     private:
         PROJECT_NAME::Reader<Buf> r;
         std::vector<AstToken*> temp;
-        std::vector<type::Object*> obj;
         TyPool& pool;
         type::TypeAstReader<AstReader,Buf> tr;
 
@@ -25,11 +24,6 @@ namespace ast{
             return ret;
         }
 
-        type::Object* new_Object(){
-            auto ret=ast::new_<type::Object>();
-            obj.push_back(ret);
-            return ret;
-        }
 
         bool error(const char* str){
             throw str;
@@ -79,10 +73,12 @@ namespace ast{
 
         bool After(AstToken*& tok){
             assert(tok);
+            bool f=false;
             while(Call(tok)||Index(tok)){
                 assert(tok);
+                f=true;
             }
-            return true;
+            return f;
         }
 
         bool String(AstToken*& tok){
@@ -198,8 +194,10 @@ namespace ast{
         }
 
         bool Primary(AstToken*& tok){
-            return String(tok)||Number(tok)||BoolLiteral(tok)||NullLiteral(tok)||Func(tok)||
-                   ScopedIdentifier(tok)||GlobalScopedIdentifier(tok)||error("primary:expect primary object but not");
+            return (String(tok)||Number(tok)||BoolLiteral(tok)||NullLiteral(tok)||Func(tok)||
+                   ScopedIdentifier(tok)||GlobalScopedIdentifier(tok)||
+                   error("primary:expect primary object but not"))&&
+                   (After(tok)||true);
         }
 
         bool Increment(AstToken*& tok){
@@ -705,14 +703,6 @@ namespace ast{
             return false;
         }
 
-        type::Object* new_objectp(PROJECT_NAME::Reader<Buf>* p){
-            if(&r==p){
-                return new_Object();
-            }
-            error("this compiler is broken");
-            return nullptr;
-        }
-
         Buf& bufctrl(){
             return r.ref();
         }
@@ -722,9 +712,6 @@ namespace ast{
             bool ret=true;
             auto tmpdel=[this]{
                 for(auto p:temp){
-                    delete_(p);
-                }
-                for(auto p:obj){
                     delete_(p);
                 }
                 pool.delall();

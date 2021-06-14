@@ -38,6 +38,15 @@
         
 
 namespace PROJECT_NAME{
+    inline bool getfilesizebystat(int fd,size_t& size){
+        COMMONLIB_FILEIO_STRUCT_STAT status;
+        if(COMMONLIB_FILEIO_FUNC_FSTAT(fd,&status)==-1){
+            return false;
+        }
+        size=(size_t)status.st_size;
+        return true;
+    } 
+
     struct FileInput{
     private:
         ::FILE* file=nullptr;
@@ -88,12 +97,10 @@ namespace PROJECT_NAME{
             fopen_s(&tmp,filename,"rb");
             if(!tmp)return false;
             auto fd=_fileno(tmp);
-            COMMONLIB_FILEIO_STRUCT_STAT status;
-            if(COMMONLIB_FILEIO_FUNC_FSTAT(fd,&status)==-1){
+            if(getfilesizebystat(fd,size_cache)){
                 fclose(tmp);
                 return 0;
             }
-            size_cache=(size_t)status.st_size;
             close();
             file=tmp;
             return true;
@@ -231,7 +238,7 @@ namespace PROJECT_NAME{
     struct FileMap{
     private:
     #if defined(_WIN32)
-        HANDLE file=nullptr;
+        HANDLE file=INVALID_HANDLE_VALUE;
         HANDLE maph=nullptr;
 
         bool open_detail(const char* name){
@@ -274,31 +281,92 @@ namespace PROJECT_NAME{
         }
 
         bool close_detail(){
-            if(!file)return false;
+            if(file==INVALID_HANDLE_VALUE)return false;
             UnmapViewOfFile((LPCVOID)place);
             CloseHandle(maph);
             CloseHandle(file);
-            file=nullptr;
+            file=INVALID_HANDLE_VALUE;
             maph=nullptr;
             place=nullptr;
             _size=0;
             return true;
         }
+
+        bool move_detail(FileMap&& in){
+            file=in.file;
+            in.file=nullptr;
+            maph=in.maph;
+            in.maph=nullptr;
+            return true;
+        }
     #elif defined(__linux__)
         int fd=-1;
-
+        long maplen=0;
         bool open_detail(const char* in){
+            int tmpfd=::open(in,O_RDONLY);
+            if(tmpfd==-1){
+                return false;
+            }
+            size_t tmpsize=0;
+            if(!getfilesizebystat(tmpfd,tmpsize)){
+                ::close(fd);
+                return false;
+            }
+            long pagesize=::getpagesize(),mapsize=0;
+            mapsize=(tmpsize/pagesize+1)*pagesize;
+            char* tmpmap=(char*)mmap(nullptr,mapsize,PROT_READ,MAP_SHARED,tmpfd,0);
+            if(tmpmap==MAP_FAILED){
+                ::close(tmpfd);
+                return false;
+            }
+            close_detail();
+            fd=tmpfd;
+            _size=tmpsize;
+            maplen=mapsize
+            place=tmpmap;
             return false;
         }
 
         bool close_detail(){
-            return false;
+            if(fd==-1)return false;
+            munmap(place,maplen);
+            ::close(fd);
+            fd=-1;
+            maplen=0;
+            place=nullptr;
+            _size=0;
+            return true;
+        }
+
+        bool move_detail(FileMap&& in){
+            fd=in.fd;
+            in.fd=-1;
+            return true;
         }
     #endif
         char* place=nullptr;
         size_t _size=0;
+
+        bool move_common(FileMap&& in){
+            move_detail(std::forward<FileMap>(in));
+            place=in.place;
+            in.place=nullptr;
+            _size=in._size;
+            in._size=0;
+            return true;
+        }
     public:
-    
+        FileMap(const char* name){
+            open(name);
+        }
+
+        ~FileMap(){
+            close();
+        }
+
+        FileMap(FileMap&& in){
+            move_common(std::forward<FileMap>(in));
+        }
 
         bool open(const char* name){
             if(!name)return false;

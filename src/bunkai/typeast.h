@@ -19,7 +19,7 @@ namespace ast{
 
 
             Object* new_Object(){
-                return s.new_objectp(&r);
+                return pool.new_Object();
             }
 
             bool error(const char* err){

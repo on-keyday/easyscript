@@ -110,12 +110,12 @@ namespace ast{
    
     inline void delete_token(AstToken* tok){
         if(!tok)return;
-        delete_(tok->left);
-        delete_(tok->right);
-        delete_(tok->cond);
-        delete_(tok->arg.node);
-        delete_(tok->block.node);
-        delete_(tok->next);
+        delete_token(tok->left);
+        delete_token(tok->right);
+        delete_token(tok->cond);
+        delete_token(tok->arg.node);
+        delete_token(tok->block.node);
+        delete_token(tok->next);
         delete_(tok);
     }
 
@@ -186,13 +186,24 @@ namespace ast{
 
         struct TypePool{
             std::vector<Type*> pool;
+            std::vector<Object*> obj;
             //size_t pos=1;
 
             void delall(){
                 for(auto r:pool){
                     ast::delete_(r);
                 }
+                for(auto r:obj){
+                    ast::delete_(r);
+                }
                 pool.resize(0);
+                obj.resize(0);
+            }
+
+            Object* new_Object(){
+                auto ref=ast::new_<Object>();
+                obj.push_back(ref);
+                return ref;
             }
 
             Type* new_Type(){

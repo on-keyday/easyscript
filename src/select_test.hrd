@@ -1,6 +1,0 @@
-select{
-case DONE():
-	return false;
-default:
-	yes();
-}

@@ -85,7 +85,7 @@ int main(int argc,char** argv){
     //hardtest();
     //auto ret=netclient_argv(argc,argv);
     ast::type::TypePool pool;
-    ast::AstReader r(FileMap(R"(D:\CommonLib\CommonLib2\src\bunkai_src\define_asm.asd)"),pool);
+    ast::AstReader r(FileMap(R"(../../../src/bunkai_src/define_asm.asd)"),pool);
     ast::AstToken* tok=nullptr;
     const char* err=nullptr;
     r.parse(tok,&err);

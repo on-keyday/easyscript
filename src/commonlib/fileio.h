@@ -11,6 +11,7 @@
 #elif defined(__linux__)
 #include<sys/mman.h>
 #include <fcntl.h>
+#include<unistd.h>
 #else
     #error "unsurpported platform"
 #endif
@@ -323,7 +324,7 @@ namespace PROJECT_NAME{
             close_detail();
             fd=tmpfd;
             _size=tmpsize;
-            maplen=mapsize
+            maplen=mapsize;
             place=tmpmap;
             return false;
         }

@@ -291,7 +291,7 @@ namespace PROJECT_NAME{
             return false;
         }
 
-        bool close_detail(const char* in){
+        bool close_detail(){
             return false;
         }
     #endif

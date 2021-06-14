@@ -33,6 +33,7 @@
 #define COMMONLIB_FILEIO_FUNC_FSTAT ::fstat
 #define COMMONLIB_FILEIO_FUNC_FSEEK ::fseek
 #define COMMONLIB_FILEIO_FSEEK_CAST(x) (long)(x)
+#define _fileno fileno
 #endif
         
 
@@ -287,7 +288,7 @@ namespace PROJECT_NAME{
         int fd=-1;
 
         bool open_detail(const char* in){
-            
+
         }
     #endif
         char* place=nullptr;
@@ -314,4 +315,7 @@ namespace PROJECT_NAME{
         }
 
     };
+#ifdef fileno
+#undef fileno
+#endif
 }

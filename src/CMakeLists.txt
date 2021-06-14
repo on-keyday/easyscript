@@ -4,19 +4,22 @@
 if(WIN32)
 include_directories("D:\\OpenSSL\\build-x64-debug\\include")
 link_directories("D:\\OpenSSL\\build-x64-debug\\lib")
+add_executable(httpc "httpc.cpp" )
+file(GLOB HTTPC "httpc/**")
+add_library(netclient SHARED ${HTTPC} "httpc2.cpp")
+target_link_libraries(httpc netclient)
 else()
 find_package(OpenSSL REQUIRED)
 endif()
+
 include_directories("commonlib")
-add_executable(httpc "httpc.cpp" )
+
 file(GLOB EASY_H "easyscript/*.h")
 file(GLOB EASY_CPP "easyscript/*.cpp")
 #file(GLOB HARD_H "hardscript/*.h")
 #file(GLOB HARD_SC "hardscript/*" "hardscript/*/*")
 
-file(GLOB HTTPC "httpc/**")
-add_library(netclient SHARED ${HTTPC} "httpc2.cpp")
-target_link_libraries(httpc netclient)
+
 add_library(easyscript SHARED ${EASY_CPP} ${EASY_H})
 add_executable(program "main.cpp")
 target_link_libraries(program easyscript)

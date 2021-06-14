@@ -288,7 +288,11 @@ namespace PROJECT_NAME{
         int fd=-1;
 
         bool open_detail(const char* in){
+            return false;
+        }
 
+        bool close_detail(const char* in){
+            return false;
         }
     #endif
         char* place=nullptr;

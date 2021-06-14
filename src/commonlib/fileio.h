@@ -306,6 +306,7 @@ namespace PROJECT_NAME{
         long maplen=0;
         bool open_detail(const char* in){
             int tmpfd=::open(in,O_RDONLY);
+            std::cout << tmpfd << "\n";
             if(tmpfd==-1){
                 return false;
             }

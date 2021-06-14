@@ -9,7 +9,7 @@
 #include"typeast.h"
 namespace ast{
 
-    template<class Buf,class TyPool=ast::type::TypePool>
+    template<class Buf=std::string,class TyPool=ast::type::TypePool>
     struct AstReader{
     private:
         PROJECT_NAME::Reader<Buf> r;

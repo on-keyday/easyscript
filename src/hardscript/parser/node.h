@@ -412,10 +412,14 @@ namespace node{
         if(!ret){
             return "switch:memory is full";
         }
+        Error<Tree,Str> err=expr<Buf,Tree,Str>(r);
+        if(!err){
+            return err;
+        }
+        ret->cond=err.release();
         if(!r.expect("{")){
             return "switch:expected { but not";
         }
-        Error<Tree,Str> err;
         ret->blockbegin=r.readpos();
         if(!case_block<Buf,Tree,Str>(r,ret->inblock,err)){
             delete ret;
@@ -465,7 +469,7 @@ namespace node{
     void to_json(PROJECT_NAME::JSON& j,const Node<Str>& n){
         using namespace PROJECT_NAME;
         using K=NodeKind;
-        auto block=[&]{
+        auto block=[&](){
             auto& ref=j["block"];
             j["blockpos"]=n.blockbegin;
             ref="[]"_json;
@@ -496,12 +500,17 @@ namespace node{
             j["cond"]=n.cond;
             block();
         }
-        else if(n.kind==K::ctrl_select||n.kind==K::ctrl_switch){
+        else if(n.kind==K::ctrl_switch){
+            j["cond"]=n.cond;
+            block();
+        }
+        else if(n.kind==K::ctrl_select){
             block();
         }
         else {
             j.not_null_assign("left",n.left);
             j.not_null_assign("right",n.right);
+            
         }
     }
 
@@ -510,22 +519,23 @@ namespace node{
         using K=NodeKind;
         switch (kind)
         {
-        NK_CASE_BLOCK(boolean,"bool")
-        NK_CASE_BLOCK(integer,"int")
-        NK_CASE_BLOCK(floats,"float")
-        NK_CASE_BLOCK(string,"string")
-        NK_CASE_BLOCK(create,"new")
-        NK_CASE_BLOCK(closure,"closure")
-        NK_CASE_BLOCK(id,"id")
+        NK_CASE_BLOCK(obj_bool,"bool")
+        NK_CASE_BLOCK(obj_int,"int")
+        NK_CASE_BLOCK(obj_float,"float")
+        NK_CASE_BLOCK(obj_string,"string")
+        NK_CASE_BLOCK(obj_new,"new")
+        NK_CASE_BLOCK(obj_closure,"closure")
+        NK_CASE_BLOCK(obj_id,"id")
         NK_CASE_BLOCK(ctrl_for,"for")
         NK_CASE_BLOCK(ctrl_if,"if")
         NK_CASE_BLOCK(ctrl_case,"case")
         NK_CASE_BLOCK(ctrl_select,"select")
         NK_CASE_BLOCK(ctrl_switch,"switch")
         default:
-            to="unknown";
+            to=node::operator_to_str(kind);
             break;
         }
+#undef NK_CASE_BLOCK
     }
 
     template<class Str>

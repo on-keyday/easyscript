@@ -1,0 +1,24 @@
+func main(arg []string)->int{
+	if a:=null;a{
+		return 0;
+	}
+	list:=std::filesystem::current_dir::list();
+
+	for it:=range(list){
+		print(it.name);
+	}
+	return false;
+}
+
+func range(list &){
+	var hold std::map<decltype(list)>;
+	if hold := hold.exists(list){
+		
+	}
+}
+
+decl main(arg []string){
+	
+}
+
+

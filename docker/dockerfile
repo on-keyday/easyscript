@@ -1,0 +1,17 @@
+FROM ubuntu:latest
+
+RUN mkdir /commonlib
+WORKDIR /commonlib
+
+RUN apt-get update
+RUN apt-get upgrade -y
+RUN apt-get install ninja-build -y
+
+RUN apt-get install build-essential -y
+RUN apt-get install clang -y
+
+#RUN apt-get install cmake -y
+
+RUN apt-get install vim -y
+
+RUN apt-get install python -y

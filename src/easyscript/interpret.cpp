@@ -85,6 +85,15 @@ ValType interpreter::interpret_a_cmd(Command& cmd,IdTable& table,std::vector<Com
             }
             return i;
         }
+        else if(cmd.name=="while"){
+            while(true){
+                auto i=interpret_judge_do(cmd,table);
+                if(i.first=="(nodone)"&&i.second==EvalType::none){
+                    return succeed;
+                }
+                if(i.second==EvalType::error)return i;
+            }
+        }
         else{
             return err("unsupported control:"+cmd.name);
         }

@@ -11,7 +11,9 @@
 #include<map>
 #include<iostream>
 #include"easyscript/script.h"
-#include"hardscript/hardtest.h"
+//#include"hardscript/hardtest.h"
+#include"bunkai/ast.h"
+#include<fileio.h>
 
 using namespace PROJECT_NAME;
 using strreader=Reader<std::string>;
@@ -80,7 +82,13 @@ int main(int argc,char** argv){
     execute(script,1);
     //std::cout << get_result(script)<< "\n";
     delete_script(script);
-    hardtest();
+    //hardtest();
     //auto ret=netclient_argv(argc,argv);
+    ast::type::TypePool pool;
+    ast::AstReader<PROJECT_NAME::FileInput> r(FileInput(R"(D:\CommonLib\CommonLib2\src\bunkai_src\define_asm.asd)"),pool);
+    ast::AstToken* tok=nullptr;
+    const char* err=nullptr;
+    r.parse(tok,&err);
+    ast::check_assert();
     return 0;
 }

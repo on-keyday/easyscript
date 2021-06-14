@@ -7,13 +7,13 @@ namespace node{
         unknown,
 
         //object
-        create,
-        boolean,
-        integer,
-        floats,
-        string, 
-        closure,
-        id,
+        obj_new,
+        obj_bool,
+        obj_int,
+        obj_float,
+        obj_string, 
+        obj_closure,
+        obj_id,
         
         //node
         ctrl_for,
@@ -47,6 +47,8 @@ namespace node{
         op_land, //a && b
         op_cast, //cast<T> a
         op_cond, //a ? b : c
+        op_cond_query, //a?b
+        op_cond_colon, //a:b
         op_equ, //a == b
         op_neq, //a != b
         op_lgr, //a > b
@@ -55,6 +57,8 @@ namespace node{
         op_ller, //a >= b
         op_rsh, //a >> b
         op_lsh, //a << b
+        op_lnot, //!a
+        op_bnot, //~a
         op_call, //a()
         op_access, //a[b]
         op_block, //{}
@@ -72,6 +76,8 @@ namespace node{
         op_bor_assign, //a |= b
         op_bxor_assign, //a ^= b
         op_init, //a := b
+        op_dot, //a.b
+        op_arrow, //a->b
     };
 
 
@@ -91,6 +97,8 @@ namespace node{
         CASE_LAB_OPS_TO_STR_NODE(op_bxor,"^")
         CASE_LAB_OPS_TO_STR_NODE(op_cast,"cast")
         CASE_LAB_OPS_TO_STR_NODE(op_cond,"?:")
+        CASE_LAB_OPS_TO_STR_NODE(op_cond_query,"?")
+        CASE_LAB_OPS_TO_STR_NODE(op_cond_colon,":")
         CASE_LAB_OPS_TO_STR_NODE(op_equ,"==")
         CASE_LAB_OPS_TO_STR_NODE(op_neq,"!=")
         CASE_LAB_OPS_TO_STR_NODE(op_lgr,">")
@@ -116,6 +124,10 @@ namespace node{
         CASE_LAB_OPS_TO_STR_NODE(op_bor_assign,"|=")
         CASE_LAB_OPS_TO_STR_NODE(op_bxor_assign,"^=")
         CASE_LAB_OPS_TO_STR_NODE(op_init,":=")
+        CASE_LAB_OPS_TO_STR_NODE(op_dot,".")
+        CASE_LAB_OPS_TO_STR_NODE(op_arrow,"->")
+        CASE_LAB_OPS_TO_STR_NODE(op_lnot,"!")
+        CASE_LAB_OPS_TO_STR_NODE(op_bnot,"~")
         default:return "";
         }
     }
@@ -125,27 +137,43 @@ namespace node{
 
     template<class String>
     NodeKind str_to_nodekind(const String& str,bool has_left){
-#define CASE_LAB_OPS_TO_STR_NODE(n,s) if(str==s){return NodeKind::n}
+#define CASE_LAB_OPS_TO_STR_NODE(n,s) if(str==s){return NodeKind::n;}
+        if(has_left){
+            CASE_LAB_OPS_TO_STR_NODE(op_mul,"*")
+            CASE_LAB_OPS_TO_STR_NODE(op_div,"/")
+            CASE_LAB_OPS_TO_STR_NODE(op_mod,"%")
+            CASE_LAB_OPS_TO_STR_NODE(op_lor,"||")
+            CASE_LAB_OPS_TO_STR_NODE(op_land,"&&")
+            CASE_LAB_OPS_TO_STR_NODE(op_bor,"|")
+            CASE_LAB_OPS_TO_STR_NODE(op_band,"&")
+            CASE_LAB_OPS_TO_STR_NODE(op_bxor,"^")
+            CASE_LAB_OPS_TO_STR_NODE(op_equ,"==")
+            CASE_LAB_OPS_TO_STR_NODE(op_neq,"!=")
+            CASE_LAB_OPS_TO_STR_NODE(op_lgr,">")
+            CASE_LAB_OPS_TO_STR_NODE(op_llr,"<")
+            CASE_LAB_OPS_TO_STR_NODE(op_lger,">=")
+            CASE_LAB_OPS_TO_STR_NODE(op_ller,"<=")
+            CASE_LAB_OPS_TO_STR_NODE(op_lsh,"<<")
+            CASE_LAB_OPS_TO_STR_NODE(op_rsh,">>")
+            CASE_LAB_OPS_TO_STR_NODE(op_assign,"=")
+            CASE_LAB_OPS_TO_STR_NODE(op_add_assign,"+=")
+            CASE_LAB_OPS_TO_STR_NODE(op_sub_assign,"-=")
+            CASE_LAB_OPS_TO_STR_NODE(op_mul_assign,"*=")
+            CASE_LAB_OPS_TO_STR_NODE(op_div_assign,"/=")
+            CASE_LAB_OPS_TO_STR_NODE(op_mod_assign,"%=")
+            CASE_LAB_OPS_TO_STR_NODE(op_band_assign,"&=")
+            CASE_LAB_OPS_TO_STR_NODE(op_bor_assign,"|=")
+            CASE_LAB_OPS_TO_STR_NODE(op_bxor_assign,"^=")
+            CASE_LAB_OPS_TO_STR_NODE(op_init,":=")
+            CASE_LAB_OPS_TO_STR_NODE(op_cond_query,"?")
+            CASE_LAB_OPS_TO_STR_NODE(op_cond_colon,":")
+            CASE_LAB_OPS_TO_STR_NODE(op_dot,".")
+            CASE_LAB_OPS_TO_STR_NODE(op_arrow,"->")
+        }
         CASE_LAB_OPS_TO_STR_NODE(op_add,"+")
         CASE_LAB_OPS_TO_STR_NODE(op_sub,"-")
-        if(has_left)CASE_LAB_OPS_TO_STR_NODE(op_mul,"*")
-        CASE_LAB_OPS_TO_STR_NODE(op_div,"/")
-        CASE_LAB_OPS_TO_STR_NODE(op_mod,"%")
-        CASE_LAB_OPS_TO_STR_NODE(op_lor,"||")
-        CASE_LAB_OPS_TO_STR_NODE(op_land,"&&")
-        CASE_LAB_OPS_TO_STR_NODE(op_bor,"|")
-        if(has_left)CASE_LAB_OPS_TO_STR_NODE(op_band,"&")
-        CASE_LAB_OPS_TO_STR_NODE(op_bxor,"^")
         if(str[0]=='c'&&str[1]=='a'&&str[2]=='s'&&str[4]=='t')return NodeKind::op_cast;
         CASE_LAB_OPS_TO_STR_NODE(op_cond,"?:")
-        CASE_LAB_OPS_TO_STR_NODE(op_equ,"==")
-        CASE_LAB_OPS_TO_STR_NODE(op_neq,"!=")
-        CASE_LAB_OPS_TO_STR_NODE(op_lgr,">")
-        CASE_LAB_OPS_TO_STR_NODE(op_llr,"<")
-        CASE_LAB_OPS_TO_STR_NODE(op_lger,">=")
-        CASE_LAB_OPS_TO_STR_NODE(op_ller,"<=")
-        CASE_LAB_OPS_TO_STR_NODE(op_lsh,"<<")
-        CASE_LAB_OPS_TO_STR_NODE(op_rsh,">>")
         CASE_LAB_OPS_TO_STR_NODE(op_call,"()")
         CASE_LAB_OPS_TO_STR_NODE(op_access,"[]")
         CASE_LAB_OPS_TO_STR_NODE(op_block,"{}")
@@ -153,61 +181,27 @@ namespace node{
         CASE_LAB_OPS_TO_STR_NODE(op_decr,"--")
         CASE_LAB_OPS_TO_STR_NODE(op_dref,"*")
         CASE_LAB_OPS_TO_STR_NODE(op_addr,"&")
-        CASE_LAB_OPS_TO_STR_NODE(op_assign,"=")
-        CASE_LAB_OPS_TO_STR_NODE(op_add_assign,"+=")
-        CASE_LAB_OPS_TO_STR_NODE(op_sub_assign,"-=")
-        CASE_LAB_OPS_TO_STR_NODE(op_mul_assign,"*=")
-        CASE_LAB_OPS_TO_STR_NODE(op_div_assign,"/=")
-        CASE_LAB_OPS_TO_STR_NODE(op_mod_assign,"%=")
-        CASE_LAB_OPS_TO_STR_NODE(op_band_assign,"&=")
-        CASE_LAB_OPS_TO_STR_NODE(op_bor_assign,"|=")
-        CASE_LAB_OPS_TO_STR_NODE(op_bxor_assign,"^=")
-        CASE_LAB_OPS_TO_STR_NODE(op_init,":=")
+        CASE_LAB_OPS_TO_STR_NODE(op_lnot,"!")
+        CASE_LAB_OPS_TO_STR_NODE(op_bnot,"~")
         return NodeKind::unknown;
     }
 
 #undef CASE_LAB_OPS_TO_STR_NODE
 
     template<class Tree,class Buf,class Recall,class Error,class Str=Buf>
-    struct Check{
+    struct NodeExpect{
         bool mustexpect=false;
         bool syntaxerr=false;
         Recall& recall;
         Error errbuf;
-        Check(Recall& func):recall(func){}
+        NodeExpect(Recall& func):recall(func){}
 
         void error(const char* str){
             errbuf.append(str);
         }
 
         NodeKind decl_kind(const Str& str,Tree* left,Tree* right){
-            auto e=[&str](auto s){return str==s;};
-            if(!left&&!right){
-                if(e("int")){
-                    return NodeKind::integer;
-                }
-                else if(e("float")){
-                    return NodeKind::floats;
-                }
-                else if(e("bool")){
-                    return NodeKind::boolean;
-                }
-                else if(e("closure")){
-                    return NodeKind::closure;
-                }
-                else if(e("new")){
-                    return NodeKind::create;
-                }
-                else if(e("var")){
-                    return NodeKind::id;
-                }
-                else{
-                    return NodeKind::unknown;
-                }
-            }
-            return NodeKind::unknown;
-            
-            return NodeKind::unknown;
+            return str_to_nodekind(str,left?true:false);
         }
         
         int expect(PROJECT_NAME::Reader<Buf>* self,Str& expected,int depth){
@@ -278,8 +272,6 @@ namespace node{
                 return 0;
             }
         }
-
-        
     };
 
     template<class Tree,class Buf,class Str=Buf>

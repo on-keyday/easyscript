@@ -103,7 +103,14 @@ namespace PROJECT_NAME{
 
         bool refcheck(){
             if(refed){
-                release();
+                auto s=buf_size(buf);
+                if(pos>=s){
+                    pos=s;
+                    stop=true;
+                }
+                else{
+                    stop=false;
+                }
                 refed=false;
                 return true;
             }

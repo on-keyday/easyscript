@@ -8,10 +8,13 @@
 #include<reader.h>
 #include<basic_helper.h>
 #include<basic_tree.h>
+#include"operators.h"
+#include"type.h"
 
 namespace hard_expr{
-    template<class Tree,class Str,class Kind,class Buf,class Customize>
+    template<class Tree,class Str,class Buf,class Customize>
     struct HardExprTree{
+        using Kind=node::NodeKind;
         Tree* result=nullptr;
         Customize cus;
         int depthmax=0;
@@ -51,7 +54,7 @@ namespace hard_expr{
             return cus.expect(self,expected,depth);
         }
 
-        Tree* primary_tree(PROJECT_NAME::Reader<Buf>* self){
+        Tree* primary(PROJECT_NAME::Reader<Buf>* self){
             Tree* ret=nullptr;
             if(self->expect("(")){
                 ret=parse_arg(nullptr,self,"()",")");
@@ -72,7 +75,7 @@ namespace hard_expr{
             else if(self->ahead("\"")||self->ahead("'")){
                 Str str;
                 if(!self->string(str))return nullptr;
-                ret=make_tree(str,nullptr,nullptr,decl_kind("string",nullptr,nullptr));
+                ret=make_tree(str,nullptr,nullptr,Kind::obj_string);
                 if(!ret){
                     cus.error("string:memory is full");
                     return nullptr;
@@ -84,10 +87,10 @@ namespace hard_expr{
                 self->readwhile(num,PROJECT_NAME::number,&ctx);
                 if(!ctx.succeed)return nullptr;
                 if(ctx.floatf){
-                    ret=make_tree(num,nullptr,nullptr,decl_kind("float",nullptr,nullptr));
+                    ret=make_tree(num,nullptr,nullptr,Kind::obj_float);
                 }
                 else{
-                    ret=make_tree(num,nullptr,nullptr,decl_kind("int",nullptr,nullptr));
+                    ret=make_tree(num,nullptr,nullptr,Kind::obj_int);
                 }
                 if(!ret){
                     cus.error("digit:memory is full");
@@ -109,13 +112,16 @@ namespace hard_expr{
                 }
                 auto obj=parse_arg(tmp,self,"()",")");
                 if(!obj)return nullptr;
-                ret=make_tree("new",nullptr,obj,decl_kind("new",nullptr,nullptr));
+                ret=make_tree("new",nullptr,obj,Kind::obj_new);
                 if(!ret){
                     cus.error("new:memory is full");
                     delete obj;
                     return nullptr;
                 }
-            }  
+            }
+            else if(self->expect("func",PROJECT_NAME::is_c_id_usable)){
+                
+            }
             else if(PROJECT_NAME::is_c_id_top_usable(self->achar())||self->achar()=='$'||self->achar()==':'){
                 Str id;
                 if(self->expect("$$")){
@@ -128,10 +134,10 @@ namespace hard_expr{
                     if(!id_read(self,id))return nullptr;
                 }
                 if(id=="true"||id=="false"){
-                    ret=make_tree(id,nullptr,nullptr,decl_kind("bool",nullptr,nullptr));
+                    ret=make_tree(id,nullptr,nullptr,Kind::obj_bool);
                 }
                 else{
-                    ret=make_tree(id,nullptr,nullptr,decl_kind("var",nullptr,nullptr));
+                    ret=make_tree(id,nullptr,nullptr,Kind::obj_id);
                 }
                 if(!ret)return nullptr;
             }
@@ -159,7 +165,7 @@ namespace hard_expr{
             return true;
         }
 
-        Tree* after_tree(Tree* ret,PROJECT_NAME::Reader<Buf>* self){
+        Tree* after(Tree* ret,PROJECT_NAME::Reader<Buf>* self){
             const char* expected=nullptr;
             while(true){
                 if(self->expect("(")){

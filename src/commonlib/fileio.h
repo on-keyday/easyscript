@@ -6,6 +6,14 @@
 #include<stddef.h>
 #include<mutex>
 
+#ifdef _WIN32
+#include<Windows.h>
+#elif defined(__linux__)
+#include<sys/mman.h>
+#else
+    #error "unsurpported platform"
+#endif
+
 #define COMMONLIB_MSB_FLAG(x) ((x)1<<(sizeof(x)*8-1))
 
 #if defined(_WIN32)
@@ -32,8 +40,7 @@ namespace PROJECT_NAME{
     struct FileInput{
     private:
         ::FILE* file=nullptr;
-        mutable size_t size_cache=0;
-        mutable bool got_size=false;
+        size_t size_cache=0;
         mutable size_t prevpos=0;
         mutable char samepos_cache=0;
     public:
@@ -47,8 +54,8 @@ namespace PROJECT_NAME{
             in.file=nullptr;
             size_cache=in.size_cache;
             in.samepos_cache=0;
-            got_size=in.got_size;
-            in.got_size=false;
+            //got_size=in.got_size;
+            //in.got_size=false;
             prevpos=in.prevpos;
             in.prevpos=0;
             samepos_cache=in.samepos_cache;
@@ -79,9 +86,14 @@ namespace PROJECT_NAME{
             FILE* tmp=nullptr;
             fopen_s(&tmp,filename,"rb");
             if(!tmp)return false;
-            if(file){
-                close();
+            auto fd=_fileno(tmp);
+            COMMONLIB_FILEIO_STRUCT_STAT status;
+            if(COMMONLIB_FILEIO_FUNC_FSTAT(fd,&status)==-1){
+                fclose(tmp);
+                return 0;
             }
+            size_cache=(size_t)status.st_size;
+            close();
             file=tmp;
             return true;
         }
@@ -91,7 +103,7 @@ namespace PROJECT_NAME{
             ::fclose(file);
             file=nullptr;
             size_cache=0;
-            got_size=false;
+            //got_size=false;
             prevpos=0;
             samepos_cache=0;
             return true;
@@ -99,15 +111,6 @@ namespace PROJECT_NAME{
 
         size_t size()const{
             if(!file)return 0;
-            if(!got_size){
-                auto fd=_fileno(file);
-                COMMONLIB_FILEIO_STRUCT_STAT status;
-                if(COMMONLIB_FILEIO_FUNC_FSTAT(fd,&status)==-1){
-                    return 0;
-                }
-                size_cache=(size_t)status.st_size;
-                got_size=true;
-            }
             return size_cache;
         }
 
@@ -221,5 +224,94 @@ namespace PROJECT_NAME{
             std::scoped_lock<std::mutex> locker(lock);
             return buf.size();
         }
+    };
+
+
+    struct FileMap{
+    private:
+    #if defined(_WIN32)
+        HANDLE file=nullptr;
+        HANDLE maph=nullptr;
+
+        bool open_detail(const char* name){
+            HANDLE tmp=CreateFileA(
+                name,
+                GENERIC_READ,
+                FILE_SHARE_READ,
+                NULL,
+                OPEN_EXISTING,
+                FILE_ATTRIBUTE_NORMAL,
+                NULL
+            );
+
+            if(tmp==INVALID_HANDLE_VALUE){
+                return false;
+            }
+
+            DWORD high=0;
+            DWORD low=GetFileSize(tmp,&high);
+            uint64_t tmpsize=((uint64_t)high<<32)+low;
+
+            HANDLE tmpm=CreateFileMappingA(tmp,NULL,PAGE_READONLY,0,0,NULL);
+
+            if(tmpm==NULL){
+                CloseHandle(tmp);
+                return false;
+            }
+            char* rep=(char*)MapViewOfFile(tmpm,FILE_MAP_READ,0,0,0);
+            if(!rep){
+                CloseHandle(tmpm);
+                CloseHandle(tmp);
+                return false;
+            }
+            close_detail();
+            file=tmp;
+            maph=tmpm;
+            place=rep;
+            _size=(size_t)tmpsize;
+            return true;
+        }
+
+        bool close_detail(){
+            if(!file)return false;
+            UnmapViewOfFile((LPCVOID)place);
+            CloseHandle(maph);
+            CloseHandle(file);
+            file=nullptr;
+            maph=nullptr;
+            place=nullptr;
+            _size=0;
+            return true;
+        }
+    #elif defined(__linux__)
+        int fd=-1;
+
+        bool open_detail(const char* in){
+            
+        }
+    #endif
+        char* place=nullptr;
+        size_t _size=0;
+    public:
+    
+
+        bool open(const char* name){
+            if(!name)return false;
+            return open_detail(name);
+        }
+
+        bool close(){
+            return close_detail();
+        }
+
+        size_t size() const{
+            return _size;
+        }
+
+        char operator[](size_t pos)const{
+            if(!place||_size<=pos)return char();
+            return place[pos];
+        }
+
     };
 }

@@ -11,15 +11,20 @@ namespace PROJECT_NAME{
     
     template<class Tree,class Buf,class Ctx>
     Tree* primary(Reader<Buf>* self,Ctx& ctx){
-        Tree* ret=ctx.primary_tree(self);
+        Tree* ret=ctx.primary(self);
         if(!ret)return nullptr;
-        return ctx.after_tree(ret,self);
+        return ctx.after(ret,self);
     }
 
     template<class Tree,class Str,class Buf,class Ctx>
-    Tree* unary(Reader<Buf>* self,Ctx& ctx){
-        //using Char=typename Reader<Buf>::char_type;
-        //const Char* expected=nullptr;
+    auto unary(Reader<Buf>* self,Ctx& ctx)
+    ->decltype(ctx.unary(self)){
+        return ctx.unary(self);
+    }
+
+    template<class Tree,class Str,class Buf,class Ctx>
+    auto unary(Reader<Buf>* self,Ctx& ctx)
+    ->decltype(ctx.primary(self)){
         Str expected=Str();
         auto flag=ctx.expect(self,0,expected);
         Tree* tmp=nullptr;
@@ -43,11 +48,9 @@ namespace PROJECT_NAME{
 
     template<class Tree,class Str,class Buf,class Ctx>
     Tree* bin(Reader<Buf>* self,Ctx& ctx,int depth){
-        //using Char=typename Reader<Buf>::char_type;
         if(depth<=0)return unary<Tree,Str>(self,ctx);
         Tree* ret=bin<Tree,Str>(self,ctx,depth-1);
         if(!ret)return nullptr;
-        //const Char* expected=nullptr;
         Str expected=Str();
         while(true){
             auto flag=ctx.expect(self,depth,expected);

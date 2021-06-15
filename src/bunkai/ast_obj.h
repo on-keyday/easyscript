@@ -103,8 +103,12 @@ namespace ast{
             }
         }
 
-        AstList<AstToken> arg;
-        AstList<AstToken> block;
+        union{
+            AstList<AstToken> param=AstList<AstToken>();
+            AstList<AstToken> block;
+        };
+
+        AstToken(){}
     };
 
    
@@ -113,7 +117,7 @@ namespace ast{
         delete_token(tok->left);
         delete_token(tok->right);
         delete_token(tok->cond);
-        delete_token(tok->arg.node);
+        //delete_token(tok->arg.node);
         delete_token(tok->block.node);
         delete_token(tok->next);
         delete_(tok);

@@ -42,7 +42,7 @@ namespace ast{
                         tmp=nullptr;
                         Expr(tmp);
                         assert(tmp);
-                        tok->arg.push_back(tmp);
+                        tok->param.push_back(tmp);
                         if(r.expect(","))continue;
                         if(!r.expect(")")){
                             return error("call:expected , or ) but not");

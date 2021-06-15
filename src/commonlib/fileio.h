@@ -8,6 +8,7 @@
 
 #ifdef _WIN32
 #include<Windows.h>
+#include<io.h>
 #elif defined(__linux__)
 #include<sys/mman.h>
 #include <fcntl.h>
@@ -50,6 +51,7 @@ namespace PROJECT_NAME{
     } 
 
     struct FileInput{
+        friend struct FileMap;
     private:
         ::FILE* file=nullptr;
         size_t size_cache=0;
@@ -99,7 +101,7 @@ namespace PROJECT_NAME{
             fopen_s(&tmp,filename,"rb");
             if(!tmp)return false;
             auto fd=_fileno(tmp);
-            if(getfilesizebystat(fd,size_cache)){
+            if(!getfilesizebystat(fd,size_cache)){
                 fclose(tmp);
                 return 0;
             }
@@ -239,12 +241,22 @@ namespace PROJECT_NAME{
 
     struct FileMap{
     private:
-    #if defined(_WIN32)
+
+        FILE* fp=nullptr;
+
+#if defined(_WIN32)
+
         HANDLE file=INVALID_HANDLE_VALUE;
         HANDLE maph=nullptr;
 
-        bool open_detail(const char* name){
-            HANDLE tmp=CreateFileA(
+        HANDLE fp_to_native(FILE* fp){
+            int fd=_fileno(fp);
+            auto fileh=_get_osfhandle(fd);
+            return (HANDLE)fileh;
+        }
+
+        HANDLE get_handle(const char* name){
+            return CreateFileA(
                 name,
                 GENERIC_READ,
                 FILE_SHARE_READ,
@@ -253,32 +265,51 @@ namespace PROJECT_NAME{
                 FILE_ATTRIBUTE_NORMAL,
                 NULL
             );
+        }
 
-            if(tmp==INVALID_HANDLE_VALUE){
-                return false;
-            }
-
-            DWORD high=0;
-            DWORD low=GetFileSize(tmp,&high);
-            uint64_t tmpsize=((uint64_t)high<<32)+low;
-
+        bool get_map(HANDLE tmp,size_t tmpsize){
             HANDLE tmpm=CreateFileMappingA(tmp,NULL,PAGE_READONLY,0,0,NULL);
-
             if(tmpm==NULL){
-                CloseHandle(tmp);
                 return false;
             }
             char* rep=(char*)MapViewOfFile(tmpm,FILE_MAP_READ,0,0,0);
             if(!rep){
                 CloseHandle(tmpm);
-                CloseHandle(tmp);
                 return false;
             }
             close_detail();
             file=tmp;
             maph=tmpm;
             place=rep;
-            _size=(size_t)tmpsize;
+            _size=tmpsize;
+            return true;
+        }
+
+        bool open_detail(const char* in){
+            auto tmp=get_handle(in);
+            if(tmp==INVALID_HANDLE_VALUE){
+                return false;
+            }
+            DWORD high=0;
+            DWORD low=GetFileSize(tmp,&high);
+            uint64_t tmpsize=((uint64_t)high<<32)+low;
+            if(!get_map(tmp,(size_t)tmpsize)){
+                CloseHandle(tmp);
+                return false;
+            }
+            return true;
+        }
+
+        bool from_fileinput(FILE* fp,size_t size){
+            if(!fp)return false;
+            auto tmp=fp_to_native(fp);
+            if(tmp==INVALID_HANDLE_VALUE){
+                return false;
+            }
+            if(!get_map(tmp,size)){
+                return false;
+            }
+            this->fp=fp;
             return true;
         }
 
@@ -286,7 +317,13 @@ namespace PROJECT_NAME{
             if(file==INVALID_HANDLE_VALUE)return false;
             UnmapViewOfFile((LPCVOID)place);
             CloseHandle(maph);
-            CloseHandle(file);
+            if(fp){
+                fclose(fp);
+                fp=nullptr;
+            }
+            else{
+                CloseHandle(file);
+            }
             file=INVALID_HANDLE_VALUE;
             maph=nullptr;
             place=nullptr;
@@ -296,17 +333,41 @@ namespace PROJECT_NAME{
 
         bool move_detail(FileMap&& in){
             file=in.file;
-            in.file=nullptr;
+            in.file=INVALID_HANDLE_VALUE;
             maph=in.maph;
             in.maph=nullptr;
             return true;
         }
+
     #elif defined(__linux__)
         int fd=-1;
         long maplen=0;
+
+        int fp_to_native(FILE* fp){
+            return _fileno(fp);
+        }
+
+        int get_handle(const char* in){
+            return ::open(in,O_RDONLY);
+        }
+
+        bool get_map(int tmpfd,long tmpsize){
+            long pagesize=::getpagesize(),mapsize=0;
+            mapsize=(tmpsize/pagesize+1)*pagesize;
+            char* tmpmap=(char*)mmap(nullptr,mapsize,PROT_READ,MAP_SHARED,tmpfd,0);
+            if(tmpmap==MAP_FAILED){
+                return false;
+            }
+            close_detail();
+            fd=tmpfd;
+            _size=tmpsize;
+            maplen=mapsize;
+            place=tmpmap;
+            return true;
+        }
+
         bool open_detail(const char* in){
-            int tmpfd=::open(in,O_RDONLY);
-            std::cout << tmpfd << "\n";
+            int tmpfd=get_handle(in);
             if(tmpfd==-1){
                 return false;
             }
@@ -315,25 +376,36 @@ namespace PROJECT_NAME{
                 ::close(fd);
                 return false;
             }
-            long pagesize=::getpagesize(),mapsize=0;
-            mapsize=(tmpsize/pagesize+1)*pagesize;
-            char* tmpmap=(char*)mmap(nullptr,mapsize,PROT_READ,MAP_SHARED,tmpfd,0);
-            if(tmpmap==MAP_FAILED){
-                ::close(tmpfd);
+            if(!get_map(tmpfd,(long)tmpsize)){
+                ::close(fd);
                 return false;
             }
-            close_detail();
-            fd=tmpfd;
-            _size=tmpsize;
-            maplen=mapsize;
-            place=tmpmap;
-            return false;
+            return true;
+        }
+
+        bool from_fileinput(FILE* fp,size_t size){
+            if(!fp)return false;
+            auto tmp=fp_to_native(fp);
+            if(tmp==-1){
+                return false;
+            }
+            if(!get_map(tmp,size)){
+                return false;
+            }
+            this->fp=fp;
+            return true;
         }
 
         bool close_detail(){
             if(fd==-1)return false;
             munmap(place,maplen);
-            ::close(fd);
+            if(fp){
+                fclose(fp);
+                fp=nullptr;
+            }
+            else{
+                ::close(fd);
+            }
             fd=-1;
             maplen=0;
             place=nullptr;
@@ -352,6 +424,8 @@ namespace PROJECT_NAME{
 
         bool move_common(FileMap&& in){
             move_detail(std::forward<FileMap>(in));
+            fp=in.fp;
+            in.fp=nullptr;
             place=in.place;
             in.place=nullptr;
             _size=in._size;
@@ -371,6 +445,20 @@ namespace PROJECT_NAME{
             move_common(std::forward<FileMap>(in));
         }
 
+        FileMap(FileInput&& in){
+            if(!in.file){
+                close();
+                return;
+            }
+            if(!from_fileinput(in.file,in.size_cache)){
+                ::fclose(in.file);
+            }
+            in.file=nullptr;
+            in.size_cache=0;
+            in.samepos_cache=0;
+            in.prevpos=0;
+        }
+
         bool open(const char* name){
             if(!name)return false;
             return open_detail(name);
@@ -388,6 +476,8 @@ namespace PROJECT_NAME{
             if(!place||_size<=pos)return char();
             return place[pos];
         }
+
+
 
     };
 #ifdef fileno

@@ -82,12 +82,14 @@ namespace PROJECT_NAME{
             return i;
         }
 
-        size_t buf_size(Char* str)const{
+        template<class C>
+        size_t buf_size(C* str)const{
             if(!str)return 0;
             return strlen(str);
         }
 
-        size_t buf_size(const Char* str)const{
+        template<class C>
+        size_t buf_size(const C* str)const{
             if(!str)return 0;
             return strlen(str);
         }
@@ -128,11 +130,13 @@ namespace PROJECT_NAME{
             return true;
         }
 
-        bool on_end(const Char* s,size_t pos){
+        template<class C>
+        bool on_end(const C* s,size_t pos){
             return s[pos]== 0;
         }
 
-        bool on_end(Char* s,size_t pos){
+        template<class C>
+        bool on_end(C* s,size_t pos){
             return s[pos]==0;
         }
 
@@ -196,14 +200,14 @@ namespace PROJECT_NAME{
             return ahead_detail(str,not_expect,cmp);
         }
 
-        template<class NotExpect=not_expect_default,class Cmp=cmp_default>
-        size_t ahead(const Char* str,NotExpect not_expect=NotExpect(),Cmp cmp=default_cmp){
+        template<class C,class NotExpect=not_expect_default,class Cmp=cmp_default>
+        size_t ahead(const C* str,NotExpect not_expect=NotExpect(),Cmp cmp=default_cmp){
             if(!str)return false;
             return ahead_detail(str,not_expect,cmp);
         }
 
-        template<class NotExpect=not_expect_default,class Cmp=cmp_default>
-        size_t ahead(Char* str,NotExpect not_expect=NotExpect(),Cmp cmp=default_cmp){
+        template<class C,class NotExpect=not_expect_default,class Cmp=cmp_default>
+        size_t ahead(C* str,NotExpect not_expect=NotExpect(),Cmp cmp=default_cmp){
             if(!str)return false;
             return ahead_detail(str,not_expect,cmp);
         }

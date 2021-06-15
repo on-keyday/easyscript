@@ -97,7 +97,7 @@ namespace ast{
                 auto ret=new_AstToken();
                 PROJECT_NAME::NumberContext<char> c;
                 r.readwhile(ret->str,PROJECT_NAME::number,&c);
-                if(!c.succeed)return error("number:invalid number");
+                if(c.failed)return error("number:invalid number");
                 if(c.floatf){
                     ret->kind=AstKind::floatn;
                 }
@@ -669,6 +669,12 @@ namespace ast{
                 return true;
             }
             return false;
+        }
+
+        bool ReturnStmt(AstToken*& tok){
+            if(r.expect("return",PROJECT_NAME::is_c_id_usable)){
+
+            }
         }
 
         bool Stmt(AstToken*& tok){

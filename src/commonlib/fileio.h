@@ -437,6 +437,7 @@ namespace PROJECT_NAME{
             open(name);
         }
 
+
         ~FileMap(){
             close();
         }

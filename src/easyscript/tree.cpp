@@ -158,7 +158,7 @@ Tree* number_or_id(Reader<std::string>& reader){
         std::string num;
         NumberContext<char> ctx;
         reader.readwhile(num,number,&ctx);
-        if(!ctx.succeed)return nullptr;
+        if(ctx.failed)return nullptr;
         if(ctx.floatf){
             ret=make<Tree>(num,EvalType::floats);
         }

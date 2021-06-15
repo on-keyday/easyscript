@@ -51,6 +51,7 @@ namespace PROJECT_NAME{
             catch(...){
                 str=nullptr;
                 len=0;
+                return;
             }
             memmove(str,from,fromlen);
             str[len]=0;
@@ -70,13 +71,13 @@ namespace PROJECT_NAME{
         }
 
         EasyStr(const EasyStr&)=delete;
-        EasyStr(EasyStr&& from){
+        EasyStr(EasyStr&& from)noexcept{
             str=from.str;
             len=from.len;
             from.str=nullptr;
             from.len=0;
         }
-        EasyStr& operator=(EasyStr&& from){
+        EasyStr& operator=(EasyStr&& from)noexcept{
             if(str!=nullptr&&str==from.str)return *this;
             delete[] str;
             str=from.str;
@@ -289,7 +290,7 @@ namespace PROJECT_NAME{
                 std::string num;
                 NumberContext<char> ctx;
                 reader.readwhile(num,number,&ctx);
-                if(!ctx.succeed)throw "undecodable number";
+                if(ctx.failed)throw "undecodable number";
                 if(ctx.floatf){
                     auto n=std::stod(num);
                     if(minus){
@@ -445,7 +446,6 @@ namespace PROJECT_NAME{
                         else{
                             return c-10+'a';
                         }
-                        return 0;
                     };
                     s+="\\u00";
                     s+=translate(msb);

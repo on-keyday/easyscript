@@ -85,7 +85,7 @@ namespace hard_expr{
                 Str num;
                 PROJECT_NAME::NumberContext<char> ctx;
                 self->readwhile(num,PROJECT_NAME::number,&ctx);
-                if(!ctx.succeed)return nullptr;
+                if(ctx.failed)return nullptr;
                 if(ctx.floatf){
                     ret=make_tree(num,nullptr,nullptr,Kind::obj_float);
                 }

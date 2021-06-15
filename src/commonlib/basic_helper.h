@@ -12,8 +12,10 @@
 namespace PROJECT_NAME{
 
     template<class Buf>
-    struct Reference{
+    struct Refer{
+    private:
         Buf& buf;
+    public:
         Buf* operator->(){
             return &buf;
         }
@@ -29,8 +31,8 @@ namespace PROJECT_NAME{
         size_t size()const{
             return buf.size();
         }
-        Reference(Reference&& in):buf(in.buf){}
-        Reference(Buf& in):buf(in){}
+        Refer(Refer&& in):buf(in.buf){}
+        Refer(Buf& in):buf(in){}
     };
 
     template<class Char>
@@ -38,7 +40,7 @@ namespace PROJECT_NAME{
         int radix=0;
         bool floatf=false;
         bool expf=false;
-        bool succeed=false;
+        bool failed=false;
         bool (*judgenum)(Char)=nullptr;
     };
 
@@ -108,18 +110,17 @@ namespace PROJECT_NAME{
     bool number(Reader<Buf>* self,Ret& ret,NumberContext<Char>*& ctx,bool begin){
         if(!ctx)return !begin;
         if(!self){
-            ctx->succeed=true;
             return true;
         }
-        auto increment=[](auto& n,auto& ret,auto& self){
+        auto n=self->achar();
+        auto increment=[&]{
             ret.push_back(n);
             self->increment();
             n=self->achar();
         };
-        auto n=self->achar();
         if(begin){
             ctx->expf=false;
-            ctx->succeed=false;
+            ctx->failed=false;
             ctx->floatf=false;
             ctx->judgenum=nullptr;
             ctx->radix=0;
@@ -128,11 +129,11 @@ namespace PROJECT_NAME{
                     ctx->radix=10;
                     ctx->judgenum=is_digit;
                 }
-                ret.push_back(n);
-                self->increment();
+                increment();
                 return true;
             }
             else{
+                ctx->failed=true;
                 return false;
             }
         }
@@ -157,37 +158,43 @@ namespace PROJECT_NAME{
                 ctx->radix=10;
             }
             else{
-                ctx->succeed=true;
                 return true;
             }
             if(proc){
-                increment(n,ret,self);
+                increment();
                 must=true;
             }
         }
         else if(n==(Char)'.'){
-            if(ctx->floatf)return true;
+            if(ctx->floatf){
+                ctx->failed=true;
+                return true;
+            }
             ctx->floatf=true;
-            increment(n,ret,self);
+            increment();
             must=true;
         }
         else if((ctx->radix==10&&(n==(Char)'e'||n==(Char)'E'))||
                 (ctx->radix==16&&(n==(Char)'p'||n==(Char)'P'))){
-            if(ctx->expf)return true;
+            if(ctx->expf){
+                ctx->failed=true;
+                return true;
+            }
             ctx->expf=true;
             ctx->floatf=true;
-            increment(n,ret,self);
+            increment();
             if(n!=(Char)'+'&&n!=(Char)'-'){
+                ctx->failed=true;
                 return true;
             }
             ctx->radix=10;
-            increment(n,ret,self);
+            increment();
             must=true;
         }
         if(proc){
             if(!ctx->judgenum)return true;
             if(!ctx->judgenum(n)){
-                if(!must)ctx->succeed=true;
+                if(must)ctx->failed=true;
                 return true;
             }
         }

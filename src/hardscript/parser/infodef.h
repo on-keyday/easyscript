@@ -249,7 +249,7 @@ namespace info{
                 Str num;
                 PROJECT_NAME::NumberContext<char> ctx;
                 self->readwhile(num,PROJECT_NAME::number,&ctx);
-                if(!ctx.succeed)return nullptr;
+                if(ctx.failed)return nullptr;
                 if(ctx.floatf){
                     ret=make_tree(num,node::NodeKind::obj_float);
                 }

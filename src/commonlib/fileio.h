@@ -318,7 +318,7 @@ namespace PROJECT_NAME{
             UnmapViewOfFile((LPCVOID)place);
             CloseHandle(maph);
             if(fp){
-                fclose(fp);
+                ::fclose(fp);
                 fp=nullptr;
             }
             else{
@@ -400,7 +400,7 @@ namespace PROJECT_NAME{
             if(fd==-1)return false;
             munmap(place,maplen);
             if(fp){
-                fclose(fp);
+                ::fclose(fp);
                 fp=nullptr;
             }
             else{
@@ -477,8 +477,9 @@ namespace PROJECT_NAME{
             return place[pos];
         }
 
-
-
+        const char* c_str() const{
+            return place;
+        }
     };
 #ifdef fileno
 #undef fileno

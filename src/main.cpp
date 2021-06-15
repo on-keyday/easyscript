@@ -85,12 +85,13 @@ int main(int argc,char** argv){
     //hardtest();
     //auto ret=netclient_argv(argc,argv);
     ast::type::TypePool pool;
-    ast::AstReader r(FileMap(R"(../../../src/bunkai_src/define_asm.asd)"),pool);
+    ast::AstReader<PROJECT_NAME::FileMap> r(FileInput(R"(../../../src/bunkai_src/define_asm.asd)"),pool);
     ast::AstToken* tok=nullptr;
     const char* err=nullptr;
     r.parse(tok,&err);
     ast::delete_token(tok);
     pool.delall();
+    std::cout<<r.bufctrl().c_str();
     ast::check_assert();
     return 0;
 }

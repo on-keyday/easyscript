@@ -107,7 +107,7 @@ int main(int argc,char** argv){
     auto jstr=js.to_string(4);
     auto fin=std::chrono::system_clock::now();
     std::cout << jstr;
-    std::cout << std::chrono::duration_cast<std::chrono::milliseconds>(end-start) << "\n";
-    std::cout << std::chrono::duration_cast<std::chrono::milliseconds>(fin-begin) << "\n";
+    std::cout << std::chrono::duration_cast<std::chrono::milliseconds>(end-start).count() << "\n";
+    std::cout << std::chrono::duration_cast<std::chrono::milliseconds>(fin-begin).count() << "\n";
     return 0;
 }

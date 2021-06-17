@@ -17,7 +17,7 @@ namespace PROJECT_NAME{
         Buf& buf;
     public:
         Buf* operator->(){
-            return &buf;
+            return std::addressof(buf);
         }
 
         decltype(buf[0]) operator[](size_t s)const{
@@ -31,7 +31,7 @@ namespace PROJECT_NAME{
         size_t size()const{
             return buf.size();
         }
-        Refer(Refer&& in):buf(in.buf){}
+        Refer(Refer&& in)noexcept:buf(in.buf){}
         Refer(Buf& in):buf(in){}
     };
 
@@ -158,6 +158,7 @@ namespace PROJECT_NAME{
                 ctx->radix=10;
             }
             else{
+                ctx->radix=10;
                 return true;
             }
             if(proc){
@@ -187,7 +188,8 @@ namespace PROJECT_NAME{
                 ctx->failed=true;
                 return true;
             }
-            ctx->radix=10;
+            //ctx->radix=10;
+            ctx->judgenum=is_digit<Char>;
             increment();
             must=true;
         }

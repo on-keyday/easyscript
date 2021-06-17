@@ -29,7 +29,7 @@
             "name": "(gcc_build)",
             "type": "cppvsdbg",
             "request": "launch",
-            "program": "${workspaceFolder}/gcc_build/built/built/httpc.exe",
+            "program": "${workspaceFolder}/gcc_build/built/built/program.exe",
             "args": [],
             "stopAtEntry": false,
             "cwd": "${workspaceFolder}/gcc_build/built/built",

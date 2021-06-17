@@ -36,14 +36,15 @@ namespace PROJECT_NAME{
 
     template<class T>
     T translate_byte_net_and_host(const char* s){
-        int i=1;
-        char* t=(char*)&i;
-        if(t[0]){
-            return translate_byte_reverse<T>(s);
-        }
-        else{
-            return translate_byte_as_is<T>(s);
-        }
+#if defined(__BIG_ENDIAN__)
+        return translate_byte_as_is<T>(s);
+#elif defined(__LITTLE_ENDIAN__)
+        return translate_byte_reverse<T>(s);
+#else
+        static const int i=1;
+        static const bool b=(const bool)*(char*)&i;
+        return b?translate_byte_reverse<T>(s):translate_byte_as_is<T>(s);
+#endif
     }
 
     
@@ -77,7 +78,18 @@ namespace PROJECT_NAME{
                 if(str[i+2]==0)return i+2;
                 if(str[i+3]==0)return i+3;
                 if(str[i+4]==0)return i+4;
-                i+=5;
+                if(str[i+5]==0)return i+5;
+                if(str[i+6]==0)return i+6;
+                if(str[i+7]==0)return i+7;
+                if(str[i+8]==0)return i+8;
+                if(str[i+9]==0)return i+9;
+                if(str[i+10]==0)return i+10;
+                if(str[i+11]==0)return i+11;
+                if(str[i+12]==0)return i+12;
+                if(str[i+13]==0)return i+13;
+                if(str[i+14]==0)return i+14;
+                if(str[i+15]==0)return i+15;
+                i+=16;
             }
             return i;
         }
@@ -320,9 +332,10 @@ namespace PROJECT_NAME{
 
         Buf& ref(){refed=true;return buf;}
 
-        
+    private:
+
         template<class Ret>
-        static bool read_string(Reader* self,Ret& buf,bool& noline,bool begin){
+        static bool read_string(Reader* self,Ret& buf,bool*& noline,bool begin){
             if(!self)return false;
             if(begin){
                 if(self->achar()!=(Char)'\''&&self->achar()!=(Char)'"'&&self->achar()!='`')return false;
@@ -340,9 +353,9 @@ namespace PROJECT_NAME{
                         return true;
                     }
                 }
-                if(noline){
+                if(*noline){
                     if(self->achar()==(Char)'\n'||self->achar()==(Char)'\r'){
-                        noline=false;
+                        *noline=false;
                         return true;
                     }
                 }
@@ -351,48 +364,48 @@ namespace PROJECT_NAME{
             }
         }
 
-        private:
+        
 
-            template<class Func>
-            inline bool readwhile_impl_detail(Func& func,bool usecheckers){
-                ignore();
-                if(!func(this,true))return false;
-                auto ig=set_ignore(nullptr);
-                bool ok=false;
-                while(!endbuf()){
-                    if(func(this,false)){
-                        ok=true;
-                        break;
-                    }
-                    pos++;
+        template<class Func>
+        inline bool readwhile_impl_detail(Func& func,bool usecheckers){
+            ignore();
+            if(!func(this,true))return false;
+            auto ig=set_ignore(nullptr);
+            bool ok=false;
+            while(!endbuf()){
+                if(func(this,false)){
+                    ok=true;
+                    break;
                 }
-                if(endbuf()){
-                    auto t=func(nullptr,false);
-                    if(usecheckers)ok=t;
-                }
-                set_ignore(ig);
-                return ok;
+                pos++;
             }
-
-            template<class Ctx,class Ret,class Func>
-            bool readwhile_impl1(Ret& ret,Func check,Ctx& ctx,bool usecheckers){
-                if(!check)return false;
-                auto func=[&](Reader* self,bool flag){
-                    return check(self,ret,ctx,flag);
-                };
-                return readwhile_impl_detail(func,usecheckers);
+            if(endbuf()){
+                auto t=func(nullptr,false);
+                if(usecheckers)ok=t;
             }
+            set_ignore(ig);
+            return ok;
+        }
 
-            template<class Func,class Ctx>
-            bool readwhile_impl2(Func check,Ctx& ctx,bool usecheckers){
-                if(!check)return false;
-                auto func=[&](Reader* self,bool flag){
-                    return check(self,ctx,flag);
-                };
-                return readwhile_impl_detail(func,usecheckers);
-            }
+        template<class Ctx,class Ret,class Func>
+        bool readwhile_impl1(Ret& ret,Func check,Ctx& ctx,bool usecheckers){
+            if(!check)return false;
+            auto func=[&](Reader* self,bool flag){
+                return check(self,ret,ctx,flag);
+            };
+            return readwhile_impl_detail(func,usecheckers);
+        }
 
-        public:
+        template<class Func,class Ctx>
+        bool readwhile_impl2(Func check,Ctx& ctx,bool usecheckers){
+            if(!check)return false;
+            auto func=[&](Reader* self,bool flag){
+                return check(self,ctx,flag);
+            };
+            return readwhile_impl_detail(func,usecheckers);
+        }
+
+    public:
 
         template<class Ctx=void*,class Ret>
         bool readwhile(Ret& ret,bool(*check)(Reader*,Ret&,Ctx&,bool),Ctx ctx=0,bool usecheckers=false){
@@ -413,7 +426,7 @@ namespace PROJECT_NAME{
         template<class Ret>
         bool string(Ret& ret,bool noline=true){
             auto first=noline;
-            auto res=readwhile(ret,read_string,noline);
+            auto res=readwhile(ret,read_string,&noline);
             if(res){
                 if(noline!=first)return false;
             }

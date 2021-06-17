@@ -49,12 +49,15 @@ namespace ast{
         op_init,
         op_call,
         op_index,
-        
+        func_literal,
+
         if_stmt,
         block_stmt,
         for_stmt,
         var_stmt,
-        func_literal,
+        func_stmt,
+        decl_stmt,
+        return_stmt,
         program
     };
 
@@ -285,6 +288,14 @@ namespace ast{
                 Type*t =new_Type();
                 t->kind=TypeKind::structs;
                 return t;
+            }
+
+            Type* keyword(const char* t){
+                throw "keyword:unimplemented";
+            }
+
+            Type* identifier(const char* t){
+                throw "identifier:unimplemented";
             }
         };
     }

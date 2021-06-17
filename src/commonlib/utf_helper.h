@@ -312,7 +312,7 @@ namespace PROJECT_NAME{
         int res=0;
         if(C<0x80||(0xa0<C&&C<0xe0)){
             unsigned char buf[]={C};
-            res=MultiByteToWideChar(932,MB_PRECOMPOSED,(char*)buf,1,result,3);
+            res=MultiByteToWideChar(932,MB_PRECOMPOSED,(char*)buf,1,result,sizeof(result));
             if(res==0){
                 *ctx=1;
                 return true;
@@ -327,7 +327,7 @@ namespace PROJECT_NAME{
                 return true;
             }
             unsigned char buf[]={first,C};
-            res=MultiByteToWideChar(932,MB_PRECOMPOSED,(char*)buf,2,result,3);
+            res=MultiByteToWideChar(932,MB_PRECOMPOSED,(char*)buf,2,result,sizeof(result));
             if(res==0){
                 *ctx=2;
                 return true;

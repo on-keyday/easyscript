@@ -6,7 +6,9 @@
 #include<vector>
 #include<cstring>
 #include<stdint.h>
-
+#if __cplusplus > 201703L
+#include<charconv>
+#endif
 
 namespace PROJECT_NAME{
     enum class JSONType{
@@ -249,29 +251,37 @@ namespace PROJECT_NAME{
 
 
         template<class Buf>
-        JSON parse_json_detail(Reader<Buf>& reader){
+        static JSON parse_json_detail(Reader<Buf>& reader){
             const char* expected=nullptr;
             if(reader.expect("{")){
                 JSON ret("",JSONType::object);
-                while(!reader.expect("}")){
-                    std::string key;
-                    if(!reader.ahead("\""))throw "expect \" but not";
-                    if(!reader.string(key,true))throw "unreadable key";
-                    if(!reader.expect(":"))throw "expect : but not";
-                    key.pop_back();
-                    key.erase(0,1);
-                    auto tmp=parse_json_detail(reader);
-                    ret[key]=tmp;
-                    if(!reader.expect(",")&&!reader.ahead("}"))throw "expect , or } but not";
+                if(!reader.expect("}")){
+                    while(true){
+                        std::string key;
+                        if(!reader.ahead("\""))throw "expect \" but not";
+                        if(!reader.string(key,true))throw "unreadable key";
+                        if(!reader.expect(":"))throw "expect : but not";
+                        key.pop_back();
+                        key.erase(0,1);
+                        auto tmp=parse_json_detail(reader);
+                        ret[key]=tmp;
+                        if(reader.expect(","))continue;
+                        if(!reader.expect("}"))throw "expected , or } but not";  
+                        break;
+                    }
                 }
                 return ret;
             }
             else if(reader.expect("[")){
                 JSON ret("",JSONType::array);
-                while(!reader.expect("]")){
-                    auto tmp=parse_json_detail(reader);
-                    ret.push_back(std::move(tmp));
-                    if(!reader.expect(",")&&!reader.ahead("]"))throw "expect , or ] but not";
+                if(!reader.expect("]")){
+                    while(true){
+                        auto tmp=parse_json_detail(reader);
+                        ret.push_back(std::move(tmp));
+                        if(reader.expect(","))continue;
+                        if(!reader.expect("]"))throw "expect , or ] but not";
+                        break;
+                    }
                 }
                 return ret;
             }
@@ -290,20 +300,72 @@ namespace PROJECT_NAME{
                 std::string num;
                 NumberContext<char> ctx;
                 reader.readwhile(num,number,&ctx);
-                if(ctx.failed)throw "undecodable number";
-                if(ctx.floatf){
-                    auto n=std::stod(num);
+                if(ctx.failed)
+                    throw "undecodable number";
+                if(ctx.radix!=10)
+                    throw "radix is not 10";
+                auto be=num.data();
+                auto en=&num.data()[num.size()];
+                auto parse_float=[&]{
+#if (__cplusplus<201703L)||(defined(__GNUC__) && __GNUC__ < 11)
+                    auto f=std::stod(num);
                     if(minus){
-                        n=-n;
+                        f=-f;
                     }
-                    return JSON(n);
+                    return JSON(f);
+#else
+                    double d;
+                    auto res=std::from_chars(be,en,d);
+                    if(res.ec!=std::errc{}){
+                        throw "undecodable number";
+                    }
+                    if(minus){
+                        d=-d;
+                    }
+                    return JSON(d);
+#endif
+                };
+                
+#if (__cplusplus>=201703L)
+                if(ctx.floatf){
+                    return parse_float();
+                }
+                else{
+                    unsigned long long n=0;
+                    auto res=std::from_chars(be,en,n);
+                    if(res.ec==std::errc{}){
+                        if(n&0x80'00'00'00'00'00'00'00){
+                            if(minus){
+                                double df=(double)n;
+                                df=-df;
+                                return JSON(df);
+                            }
+                            else{
+                                return JSON(n);
+                            }
+                        }
+                        else{
+                            auto sn=(long long)n;
+                            if(minus){
+                                sn=-sn;
+                            }
+                            return JSON(sn);
+                        }
+                    }
+                    else{
+                        return parse_float();
+                    }
+                }
+#else
+                if(ctx.floatf){
+                    return parse_float();
                 }
                 else{
                     try{
                         auto n=std::stoull(num);
                         if(n&0x80'00'00'00'00'00'00'00){
                             if(minus){
-                                auto f=std::stod(num);
+                                auto f=(double)n;
                                 f=-f;
                                 return JSON(f);
                             }
@@ -318,13 +380,10 @@ namespace PROJECT_NAME{
                         return JSON(i);
                     }
                     catch(...){
-                        auto f=std::stod(num);
-                        if(minus){
-                            f=-f;
-                        }
-                        return JSON(f);
+                        return parse_float();
                     }
                 }
+#endif
             }
             else if(reader.expectp("true",expected,is_c_id_usable)||
                     reader.expectp("false",expected,is_c_id_usable)){
@@ -586,7 +645,7 @@ namespace PROJECT_NAME{
             }
             else if(type==JSONType::floats){
                 try{
-                    numi=std::stod(in);
+                    numf=std::stod(in);
                 }
                 catch(...){
                     type=JSONType::unset;
@@ -721,7 +780,7 @@ namespace PROJECT_NAME{
             catch(...){
                 return nullptr;
             }
-            return &array->at(pos);
+            return std::addressof(array->at(pos));
         }
 
         JSON* idx(const std::string& key)const{
@@ -732,7 +791,7 @@ namespace PROJECT_NAME{
             catch(...){
                 return nullptr;
             }
-            return &obj->at(key);
+            return std::addressof(obj->at(key));
         }
 
         bool push_back(JSON&& json){
@@ -770,6 +829,10 @@ namespace PROJECT_NAME{
             try{    
                 *this=parse_json_detail(r);
             }   
+            catch(const char* c){
+                r.set_ignore(ig);
+                return false;
+            }
             catch(...){
                 r.set_ignore(ig);
                 return false;

@@ -17,7 +17,6 @@ namespace ast{
         TyPool& pool;
         type::TypeAstReader<AstReader,Buf> tr;
 
-
         AstToken* new_AstToken(){
             auto ret=ast::new_<AstToken>();
             temp.push_back(ret);
@@ -29,6 +28,29 @@ namespace ast{
             throw str;
         }
 
+        template<class Str>
+        bool KeyWordCheck(Str& str){
+            auto e=[&](auto e){return str==e;};
+            if(e("func")||e("var")||e("decl")||
+               e("break")||e("continue")||e("if")||e("for")||e("return")||e("switch")||e("select")||
+               e("namespace")||e("struct")||e("union")||e("interface")||e("enum")||
+               e("const")||e("align")||e("atomic")||e("thread_local")||e("local")||e("global")||
+               e("float")||e("double")||e("int")||e("uint")||e("bool")||e("void")||
+               e("int8")||e("int16")||e("int32")||e("int64")||
+               e("uint8")||e("uint16")||e("uint32")||e("uint64")||
+               e("null")||e("true")||e("false")||e("cast")
+            ){
+                return error("identifier:keyword is not usable for identifier");
+            }
+            return true;
+        }
+
+        template<class Str>
+        bool IdRead(Str& str){
+            r.readwhile(str,PROJECT_NAME::untilincondition,PROJECT_NAME::is_c_id_usable<char>);
+            KeyWordCheck(str);
+            return true;
+        }
 
         bool Call(AstToken*& tok){
             if(r.expect("(")){
@@ -71,10 +93,40 @@ namespace ast{
             return false;
         }
 
+        bool AfterIncrement(AstToken*& tok){
+            if(r.expect("++")){
+                AstToken* tmp=new_AstToken();
+                tmp->str="++";
+                tmp->kind=AstKind::op_add_eq;
+                tmp->left=tok;
+                tok=tmp;
+                tok->right=new_AstToken();
+                tok->right->kind=AstKind::intn;
+                tok->right->str="1";
+                return true;
+            }
+            return false;
+        }
+
+        bool AfterDecrement(AstToken*& tok){
+            if(r.expect("--")){
+                AstToken* tmp=new_AstToken();
+                tmp->str="-=";
+                tmp->kind=AstKind::op_sub_eq;
+                tmp->left=tok;
+                tok=tmp;
+                tok->right=new_AstToken();
+                tok->right->kind=AstKind::intn;
+                tok->right->str="1";
+                return true;
+            }
+            return false;
+        }
+
         bool After(AstToken*& tok){
             assert(tok);
             bool f=false;
-            while(Call(tok)||Index(tok)){
+            while(Call(tok)||Index(tok)||AfterIncrement(tok)||AfterDecrement(tok)){
                 assert(tok);
                 f=true;
             }
@@ -141,7 +193,7 @@ namespace ast{
                 tok=new_AstToken();
                 tok->kind=AstKind::func_literal;
                 if(PROJECT_NAME::is_c_id_top_usable(r.achar())){
-                    r.readwhile(tok->str,PROJECT_NAME::untilincondition,PROJECT_NAME::is_c_id_usable<char>);
+                    IdRead(tok->str);
                 }
                 if(!r.expect("(")){
                     return error("func literal:expected ( but not");
@@ -159,8 +211,9 @@ namespace ast{
         bool Identifier(AstToken*& tok){
             if(PROJECT_NAME::is_c_id_top_usable(r.achar())){
                 tok=new_AstToken();
-                r.readwhile(tok->str,PROJECT_NAME::untilincondition,PROJECT_NAME::is_c_id_usable<char>);
                 tok->kind=AstKind::identifier;
+                IdRead(tok->str);
+                assert(tok->str.size());
                 return true;
             }
             return false;
@@ -663,8 +716,28 @@ namespace ast{
             if(Func(tok)){
                 if(After(tok)){
                     if(!r.expect(";")){
-                        return error("function statement:expected ; but not");
+                        return error("expr:expected ; but not");
                     }
+                }
+                else{
+                    tok->kind=AstKind::func_stmt;
+                }
+                return true;
+            }
+            return false;
+        }
+
+        bool DeclStmt(AstToken*& tok){
+            if(r.expect("decl",PROJECT_NAME::is_c_id_usable)){
+                if(!PROJECT_NAME::is_c_id_top_usable(r.achar())){
+                    return error("decl statement:expected identifier but not");
+                }
+                tok=new_AstToken();
+                tok->kind=AstKind::decl_stmt;
+                IdRead(tok->str);
+                tr.func_read(tok->type,false);
+                if(r.expect(";")){
+                    return error("decl statement:expected ; but not");
                 }
                 return true;
             }
@@ -673,13 +746,21 @@ namespace ast{
 
         bool ReturnStmt(AstToken*& tok){
             if(r.expect("return",PROJECT_NAME::is_c_id_usable)){
-
+                tok=new_AstToken();
+                tok->kind=AstKind::return_stmt;
+                if(r.expect(";"))return true;
+                Expr(tok->right);
+                if(!r.expect(";")){
+                    return error("return statement:expected ; but not");
+                }
+                return true;
             }
+            return false;
         }
 
         bool Stmt(AstToken*& tok){
-            return IfStmt(tok)||ForStmt(tok)||BlockStmt(tok)||FuncStmt(tok)||
-            ExprStmt(tok)||r.expect(";")||error("statement:not match for any statement");
+            return IfStmt(tok)||ForStmt(tok)||ReturnStmt(tok)||BlockStmt(tok)||FuncStmt(tok)||
+            DeclStmt(tok)||ExprStmt(tok)||r.expect(";")||error("statement:not match for any statement");
         }
 
         bool Stmts(AstList<AstToken>& tok){
@@ -703,14 +784,16 @@ namespace ast{
         AstReader(Buf&& buf,TyPool& inp):r(std::forward<Buf>(buf)),tr(*this,r,inp),pool(inp){}
 
         bool errorp(PROJECT_NAME::Reader<Buf>* p,const char* err){
-            if(&r==p){
-                return error(err);
-            }
-            return false;
+            return &r==p?error(err):false;
         }
 
         Buf& bufctrl(){
             return r.ref();
+        }
+
+        template<class Str>
+        bool idreadp(PROJECT_NAME::Reader<Buf>* p,Str& str){
+            return &r==p?IdRead(str):false;
         }
 
         bool parse(AstToken*& tok,const char** err=nullptr){
@@ -730,12 +813,14 @@ namespace ast{
                     *err=e;
                 }
                 tmpdel();
+                ret=false;
             }
             catch(...){
                 if(err){
                     *err="system error:compiler broken";
                 }
                 tmpdel();
+                ret=false;
             }
             temp.resize(0);
             return ret;

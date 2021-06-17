@@ -14,6 +14,8 @@
 #include"hardscript/hardtest.h"
 #include"bunkai/ast.h"
 #include<fileio.h>
+#include<charconv>
+#include<json_util.h>
 
 using namespace PROJECT_NAME;
 using strreader=Reader<std::string>;
@@ -88,16 +90,24 @@ int main(int argc,char** argv){
     ast::AstReader r(FileMap(R"(../../../src/bunkai_src/define_asm.asd)"),pool);
     ast::AstToken* tok=nullptr;
     const char* err=nullptr;
-    r.parse(tok,&err);
-    ast::delete_token(tok);
-    pool.delall();
+    if(r.parse(tok,&err)){
+        ast::delete_token(tok);
+        pool.delall();
+    }
     std::wcout<<r.bufctrl().c_str();
     ast::check_assert();
-
-    Reader<std::string> input("10.");
-    NumberContext<char> ctx;
-    std::string ff;
-    input.readwhile(ff,number,&ctx);
-
+    JSON js;
+    Reader<FileMap> num(R"()");
+    std::cout << num.ref().size() << "\n";
+    auto start=std::chrono::system_clock::now();
+    js.parse_assign(num);
+    auto end=std::chrono::system_clock::now();
+    long v=0;
+    auto begin=std::chrono::system_clock::now();
+    auto jstr=js.to_string(4);
+    auto fin=std::chrono::system_clock::now();
+    std::cout << jstr;
+    std::cout << std::chrono::duration_cast<std::chrono::milliseconds>(end-start) << "\n";
+    std::cout << std::chrono::duration_cast<std::chrono::milliseconds>(fin-begin) << "\n";
     return 0;
 }

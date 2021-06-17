@@ -26,6 +26,11 @@ namespace ast{
                 return s.errorp(&r,err);
             }
 
+            template<class Str>
+            bool idread(Str& in){
+                return s.idreadp(&r,in);
+            }
+
             template<class Func,class... Args>
             inline bool TypeGet(Type*& t,Func f,const char* err,Args... args){
                 TypeAstReader::Type(t);
@@ -78,7 +83,7 @@ namespace ast{
                                 auto bpos=r.readpos();
                                 auto tmp=r.set_ignore(nullptr);
                                 std::string name;
-                                r.readwhile(name,PROJECT_NAME::untilincondition,PROJECT_NAME::is_c_id_usable<char>);
+                                idread(name);
                                 if(r.expect("::")){
                                     r.seek(bpos);
                                     r.set_ignore(tmp);
@@ -138,8 +143,7 @@ namespace ast{
                     Object* param=new_Object();
                     if(r.expect("_",PROJECT_NAME::is_c_id_usable)){}
                     else if(PROJECT_NAME::is_c_id_top_usable(r.achar())){
-                        r.readwhile(param->name,PROJECT_NAME::untilincondition,PROJECT_NAME::is_c_id_usable<char>);
-                        assert(param->name!="");
+                        idread(param->name);    
                     }
                     else{
                         return error("struct:expected identifier but not");
@@ -171,8 +175,48 @@ namespace ast{
                 return false;
             }
 
+            bool KeyWord(Type*& t){
+                const char* expected=nullptr;
+                auto e=[&,this](auto c){return r.expectp(c,expected,PROJECT_NAME::is_c_id_usable);};
+                if(e("float")||e("double")||e("int")||e("uint")||e("bool")||
+                   e("int8")||e("int16")||e("int32")||e("int64")||
+                   e("uint8")||e("uint16")||e("uint32")||e("uint64"))
+                {
+                    t=pool.keyword(expected);
+                    return true;
+                }
+                return false;
+            }
+
+            bool Identifier(Type*& t){
+                std::string id;
+                auto idf=[&,this]{
+                    while(true){
+                        idread(id);
+                        if(r.expect("::")){
+                            id+="::";
+                            if(!PROJECT_NAME::is_c_id_top_usable(r.achar())){
+                                return error("type:identifier:expected identifier but not");
+                            }
+                            continue;
+                        }
+                        break;
+                    }
+                    t=pool.identifier(id.c_str());
+                    return true;
+                };
+                if(r.expect("::")){
+                    id+="::";
+                    return idf();
+                }
+                else if(PROJECT_NAME::is_c_id_top_usable(r.achar())){
+                    return idf();
+                }
+                return false;
+            }
+
             bool Type(Type*& t){
-                return Pointer(t)||Array(t)||Function(t)||Struct(t);
+                return Pointer(t)||Array(t)||Function(t)||Struct(t)||KeyWord(t)||Identifier(t);
             }
 
         public:

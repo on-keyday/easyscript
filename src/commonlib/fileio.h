@@ -174,7 +174,7 @@ namespace PROJECT_NAME{
         }
 
         bool release(Buf& ref){
-            if(&buf!=&ref)return false;
+            if(std::addressof(buf)!=std::addressof(ref))return false;
             lock.unlock();
             return true;
         }
@@ -215,7 +215,7 @@ namespace PROJECT_NAME{
         }
 
         bool release(Buf& ref){
-            if(&buf!=&ref)return false;
+            if(std::addressof(buf)!=std::addressof(ref))return false;
             lock.unlock();
             return true;
         }

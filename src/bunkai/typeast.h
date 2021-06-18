@@ -33,7 +33,12 @@ namespace ast{
 
             template<class Func,class... Args>
             inline bool TypeGet(Type*& t,Func f,const char* err,Args... args){
-                TypeAstReader::Type(t);
+                if(r.ahead(",")||r.ahead(")")){
+                    t=pool.generic();
+                }
+                else{
+                    TypeAstReader::Type(t);
+                }
                 t=f(t,args...);
                 return true;
             }
@@ -59,6 +64,7 @@ namespace ast{
                 return false;   
             }
 
+
             bool Array(Type*& t){
                 if(r.expect("[")){
                     if(r.expect("]")){
@@ -74,7 +80,7 @@ namespace ast{
                 return false;
             }
 
-            bool ParseParameter(AstList<Object>& params,bool generic){
+            bool ParseParameter(AstList<Object>& params,bool generic,bool& genty){
                 if(!r.expect(")")){
                     while(true){
                         Object* param=new_Object();
@@ -103,13 +109,17 @@ namespace ast{
                         if(!param->type){
                             read_type(param->type);
                         }
-                        if(param->name!=""&&r.expect("=")){
+                        assert(param->type);
+                        if(param->type->generic_relative){
+                            genty=true;
+                        }
+                        if(r.expect("=")){
                             s.expr(param->init);
                         }
                         params.push_back(param);
                         if(r.expect(","))continue;
                         if(!r.expect(")")){
-                            return error("param:expected ) but not");
+                            return error("param:expected ) or , but not");
                         }
                         break;
                     }
@@ -118,20 +128,24 @@ namespace ast{
             }
 
             bool FuncParse(Type*& t,bool gen){
+                if(!r.expect("(")){
+                    return error("function:expected ( but not");
+                }
                 AstList<Object> params;
-                ParseParameter(params,gen);
+                bool genty=false;
+                ParseParameter(params,gen,genty);
                 if(r.expect("->")){
                     read_type(t);
+                    assert(t);
+                    genty=genty||t->generic_relative;
                 }
                 t=pool.function(t,params);
+                t->generic_relative=genty;
                 return true;
             }
 
             bool Function(Type*& t){
                 if(r.expect("func",PROJECT_NAME::is_c_id_usable)){
-                    if(!r.expect("(")){
-                        return error("function:expected ( but not");
-                    }
                     FuncParse(t,true);
                     return true;
                 }
@@ -149,12 +163,12 @@ namespace ast{
                         return error("struct:expected identifier but not");
                     }
                     read_type(param->type);
-                    if(param->name!=""&&r.expect("=")){
+                    if(r.expect("=")){
                         s.expr(param->init);
                     }
-                    if(!r.expect(";")){
+                    /*if(!r.expect(";")){
                         return error("struct:expected ; but not");
-                    }
+                    }*/
                 }
                 return true;
             }
@@ -184,6 +198,9 @@ namespace ast{
                 {
                     t=pool.keyword(expected);
                     return true;
+                }
+                else if(e("const")){
+                    return TypeGet(t,MEMBER_CAPTURE(pool.const_of),"const");
                 }
                 return false;
             }

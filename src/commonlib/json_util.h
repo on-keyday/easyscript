@@ -6,6 +6,7 @@
 #include<vector>
 #include<cstring>
 #include<stdint.h>
+#include<regex>
 #if __cplusplus > 201703L
 #include<charconv>
 #endif
@@ -119,6 +120,12 @@ namespace PROJECT_NAME{
             JSONArrayType* array;
         };
         JSONType type=JSONType::unset;
+
+
+        inline static bool parse_ull(const std::string& str,unsigned long long& n){
+            return parse_int(str,n);
+        }
+
 
         template<class T>
         T* init(){
@@ -301,44 +308,30 @@ namespace PROJECT_NAME{
                 NumberContext<char> ctx;
                 reader.readwhile(num,number,&ctx);
                 if(ctx.failed)
-                    throw "undecodable number";
+                    throw "invalid number";
                 if(ctx.radix!=10)
                     throw "radix is not 10";
-                auto be=num.data();
-                auto en=&num.data()[num.size()];
-                auto parse_float=[&]{
-#if (__cplusplus<201703L)||(defined(__GNUC__) && __GNUC__ < 11)
-                    auto f=std::stod(num);
-                    if(minus){
-                        f=-f;
-                    }
-                    return JSON(f);
-#else
-                    double d;
-                    auto res=std::from_chars(be,en,d);
-                    if(res.ec!=std::errc{}){
+                auto parse_fl=[&]{
+                    double f;
+                    if(!parse_float(num,f)){
                         throw "undecodable number";
                     }
-                    if(minus){
-                        d=-d;
-                    }
-                    return JSON(d);
-#endif
+                    return JSON(minus?-f:f);
                 };
                 
-#if (__cplusplus>=201703L)
+//#if (__cplusplus>=201703L)
                 if(ctx.floatf){
-                    return parse_float();
+                    return parse_fl();
                 }
                 else{
                     unsigned long long n=0;
-                    auto res=std::from_chars(be,en,n);
-                    if(res.ec==std::errc{}){
+                    if(parse_ull(num,n)){
+                        /*auto res=std::from_chars(be,en,n);
+                        if(res.ec==std::errc{}){*/
                         if(n&0x80'00'00'00'00'00'00'00){
                             if(minus){
                                 double df=(double)n;
-                                df=-df;
-                                return JSON(df);
+                                return JSON(-df);
                             }
                             else{
                                 return JSON(n);
@@ -346,17 +339,14 @@ namespace PROJECT_NAME{
                         }
                         else{
                             auto sn=(long long)n;
-                            if(minus){
-                                sn=-sn;
-                            }
-                            return JSON(sn);
+                            return JSON(minus?-sn:sn);
                         }
                     }
                     else{
-                        return parse_float();
+                        return parse_fl();
                     }
                 }
-#else
+/*#else
                 if(ctx.floatf){
                     return parse_float();
                 }
@@ -383,7 +373,7 @@ namespace PROJECT_NAME{
                         return parse_float();
                     }
                 }
-#endif
+#endif*/
             }
             else if(reader.expectp("true",expected,is_c_id_usable)||
                     reader.expectp("false",expected,is_c_id_usable)){
@@ -591,6 +581,13 @@ namespace PROJECT_NAME{
             return move_assign(std::move(from));
         }
 
+        template<class Struct>
+        JSON& not_null_assign(const std::string& name,Struct* in){
+            if(!in)return *this;
+            (*this)[name]=in;
+            return *this;
+        }
+
         JSON(){
             type=JSONType::unset;
         }
@@ -754,12 +751,7 @@ namespace PROJECT_NAME{
             return obj->operator[](key);
         }
 
-        template<class Struct>
-        JSON& not_null_assign(const std::string& name,Struct* in){
-            if(!in)return *this;
-            (*this)[name]=in;
-            return *this;
-        }
+        
 
 
         JSON& at(const std::string& key)const{
@@ -801,6 +793,55 @@ namespace PROJECT_NAME{
             return true;
         }
 
+        bool push_back(const JSON& json){
+            array_if_unset();
+            array_check(false,0);
+            array->push_back(json);
+            return true;
+        }
+
+        bool insert(size_t pos,JSON&& json,bool sizecheck=true,bool valid=false){
+            array_if_unset();
+            array_check(false,0);
+            auto presize=array->size();
+            if(sizecheck&&presize<pos)return false;
+            array->insert(array->begin()+pos,std::move(json));
+            if(valid&&presize<pos){
+                auto nowsize=array->size();
+                for(auto i=presize;i<nowsize;i++){
+                    array->at(i)=nullptr;
+                }
+            }
+            return true;
+        }
+
+        bool insert(size_t pos,const JSON& json,bool sizecheck=true,bool valid=false){
+            array_if_unset();
+            array_check(false,0);
+            auto presize=array->size();
+            if(sizecheck&&presize<pos)return false;
+            array->insert(array->begin()+pos,json);
+            if(valid&&presize<pos){
+                auto nowsize=array->size();
+                for(auto i=presize;i<nowsize;i++){
+                    array->at(i)=nullptr;
+                }
+            }
+            return true;
+        }
+
+        bool erase(size_t pos){
+            array_check(false,0);
+            if(array->size()<=pos)return false;
+            array->erase(array->begin()+pos);
+            return true;
+        }
+
+        bool erase(const std::string& in){
+            obj_check(false,in);
+            return (bool)obj->erase(in);
+        }
+
         size_t size(){
             if(type!=JSONType::array)return 0;
             return array->size();
@@ -811,29 +852,42 @@ namespace PROJECT_NAME{
         ~JSON(){
             destruct();
         }
-        
-        bool parse_assign(const std::string& in){
-            Reader<const char*> reader(in.c_str(),ignore_space_line);
-            try{    
-                *this=parse_json_detail(reader);
-            }   
-            catch(...){
-                return false;
-            }
-            return true;
+
+        static inline JSON parse(const std::string& in,const char** err=nullptr){
+            JSON ret;
+            ret.parse_assign(in,err);
+            return ret;
         }
 
         template<class Buf>
-        bool parse_assign(Reader<Buf>& r){
+        static inline JSON parse(Reader<Buf>& r,const char** err=nullptr){
+            JSON ret;
+            ret.parse_assign(r,err);
+            return ret;
+        }
+        
+        bool parse_assign(const std::string& in,const char** err=nullptr){
+            Reader<PROJECT_NAME::Refer<const std::string>> r(in);
+            return parse_assign(r,err);
+        }
+
+        template<class Buf>
+        bool parse_assign(Reader<Buf>& r,const char** err=nullptr){
             auto ig=r.set_ignore(ignore_space_line);
             try{    
                 *this=parse_json_detail(r);
             }   
             catch(const char* c){
+                if(err){
+                    *err=c;
+                }
                 r.set_ignore(ig);
                 return false;
             }
             catch(...){
+                if(err){
+                    *err="number parse error";
+                }
                 r.set_ignore(ig);
                 return false;
             }
@@ -875,99 +929,7 @@ namespace PROJECT_NAME{
             return this->to_string()==right.to_string();
         }
 
-        JSON* path(const std::string& p){
-            Reader<const char*> reader(p.c_str());
-            bool filepath=false;
-            if(reader.ahead("/")){
-                filepath=true;
-            }
-            JSON* ret=this,*hold;
-            while(!reader.ceof()){
-                bool arrayf=false;
-                if(filepath){
-                    if(!reader.expect("/"))return nullptr;
-                    if(reader.ceof())break;
-                }
-                else if(reader.expect("[")){
-                    arrayf=true;
-                }
-                else if(!reader.expect(".")){
-                    return nullptr;
-                }
-                std::string key;
-                auto path_get=[&](auto& key){
-                    hold=ret->idx(key);
-                    if(!hold)return false;
-                    ret=hold;
-                    return true;
-                };
-                auto read_until_cut=[&](){
-                    if(!reader.readwhile(key,untilincondition,[&filepath,&arrayf] (char c){
-                        if(filepath){
-                            if(c=='/')return false;
-                        }
-                        else {
-                            if(c=='.'||c=='[')return false;
-                        }
-                        return true;
-                    },true))return false;
-                    return path_get(key);
-                };
-
-                if(reader.ahead("\"")||reader.ahead("'")){
-                    if(!reader.string(key,true))return nullptr;
-                    key.pop_back();
-                    key.erase(0,1);
-                    if(!path_get(key))return nullptr;
-                }
-                else if(is_digit(reader.achar())){
-                    auto beginpos=reader.readpos();
-                    if(!reader.readwhile(key,untilincondition,is_digit<char>))return nullptr;
-                    if(key=="")return nullptr;
-                    bool ok=false;
-                    if(filepath){
-                        if(!reader.ahead("/")&&!reader.ceof()){
-                            reader.seek(beginpos);
-                            key="";
-                            if(!read_until_cut())
-                                return nullptr;
-                            ok=true;
-                        }
-                    }
-                    if(!ok){
-                        uint64_t pos=0;
-                        try{
-                            pos=std::stoull(key);
-                        }
-                        catch(...){
-                            if(!path_get(key))return nullptr;
-                            ok=true;
-                        }
-                        if(!ok){
-                            hold=ret->idx(pos);
-                            if(!hold){
-                                if(!filepath||!path_get(key)){
-                                    return nullptr;
-                                }
-                            }
-                            else{
-                                ret=hold;
-                            }
-                        }
-                    }
-                }
-                else if(!arrayf){
-                    if(!read_until_cut())return nullptr;
-                }
-                else{
-                    return nullptr;
-                }
-                if(arrayf){
-                    if(!reader.expect("]"))return nullptr;
-                }
-            }
-            return ret;
-        }
+        
 
     private:
         template<class T>
@@ -1117,6 +1079,8 @@ namespace PROJECT_NAME{
         COMMONLIB_JSON_FROM_JSON_DETAIL_UNSIG(long)
         COMMONLIB_JSON_FROM_JSON_DETAIL_UNSIG(long long)
 
+#undef COMMONLIB_JSON_FROM_JSON_DETAIL_UNSIG
+#undef COMMONLIB_JSON_FROM_JSON_DETAIL_SIG
 
         void from_json_detail(float& s,const JSON& in)const{
             s=in.float_num_get<float>();
@@ -1183,12 +1147,188 @@ namespace PROJECT_NAME{
                 to[o.first]=o.second.get<remove_cv_ref<decltype(to[std::string()])>>();
             }
         }
+    public:
+
+        JSON* path(const std::string& p,bool follow_rfc=false){
+            if(follow_rfc){
+                bool ins;
+                std::string s;
+                auto ret=pointer(p,s,ins);
+                if(ins)return nullptr;
+                return ret;
+            }
+            Reader<const char*> reader(p.c_str());
+            bool filepath=false;
+            if(reader.ahead("/")){
+                filepath=true;
+            }
+            JSON* ret=this,*hold;
+            while(!reader.ceof()){
+                bool arrayf=false;
+                if(filepath){
+                    if(!reader.expect("/"))return nullptr;
+                    if(reader.ceof())break;
+                }
+                else if(reader.expect("[")){
+                    arrayf=true;
+                }
+                else if(!reader.expect(".")){
+                    return nullptr;
+                }
+                std::string key;
+                auto path_get=[&](auto& key){
+                    hold=ret->idx(key);
+                    if(!hold)return false;
+                    ret=hold;
+                    return true;
+                };
+                auto read_until_cut=[&](){
+                    reader.readwhile(key,untilincondition,[&filepath,&arrayf] (char c){
+                        if(filepath){
+                            if(c=='/')return false;
+                        }
+                        else {
+                            if(c=='.'||c=='[')return false;
+                        }
+                        return true;
+                    },true);
+                };
+                if(ret->type==JSONType::array){
+                    read_until_cut();
+                    uint64_t pos=0;
+                    if(!parse_ull(key,pos)){
+                        return nullptr;
+                    }
+                    if(!path_get(key))return nullptr;
+                }
+                else if(ret->type==JSONType::object){
+                    if(reader.ahead("\"")||reader.ahead("'")){
+                        if(!reader.string(key,true))return nullptr;
+                        key.pop_back();
+                        key.erase(0,1);
+                        if(!path_get(key))return nullptr;
+                    }
+                    else if(!arrayf){
+                        read_until_cut();
+                        if(!path_get(key))return nullptr;
+                    }
+                    else{
+                        return nullptr;
+                    }
+                }
+                if(arrayf){
+                    if(!reader.expect("]"))return nullptr;
+                }
+            }
+            return ret;
+        }
+
+        JSON* pointer(const std::string& str,std::string& lastelm,bool& insertok,bool parent=false){
+            Reader<const char*> r(str.c_str());
+            insertok=false;
+            JSON* base=this,*hold=nullptr;
+            while(true){
+                if(!r.expect("/"))return nullptr;
+                std::string name;
+                r.readwhile(name,PROJECT_NAME::untilincondition,[](char c){return c!='/';});
+                name=std::regex_replace(name,std::regex("~1"),"/");
+                name=std::regex_replace(name,std::regex("~0"),"~");
+                if(base->type==JSONType::object){
+                    hold=base->idx(name);
+                    if(!hold){
+                        if(r.ceof()){
+                            lastelm=name;
+                            insertok=true;
+                            return base;
+                        }
+                        return nullptr;
+                    }
+                }
+                else if(base->type==JSONType::array){
+                    size_t pos=0;
+                    if(r.ceof()&&name=="-"){
+                        lastelm=name;
+                        insertok=true;
+                        return base;
+                    }
+                    if(!parse_ull(name,pos))return nullptr;
+                    auto hold=base->idx(pos);
+                    if(!hold){
+                        if(r.ceof()){
+                            lastelm=name;
+                            insertok=true;
+                            return base;
+                        }
+                        return nullptr;
+                    }
+                }
+                else{
+                    return nullptr;
+                }
+                if(r.ceof()){
+                    if(parent){
+                        lastelm=name;
+                        insertok=true;
+                    }
+                    break;
+                }
+                base=hold;
+            }
+            return parent?base:hold;
+        }
+    private:
+        static bool patch_add(JSON* base,JSON* op,const std::string& lastelm){
+            auto value=op->idx("value");
+            if(!value)return false;
+            if(base->type==JSONType::array){
+                if(lastelm=="-"){
+                    base->push_back(*value);
+                }
+                else{
+                    size_t pos;
+                    if(!parse_ull(lastelm,pos))return false;
+                    if(!base->insert(pos,*value))return false;
+                }
+            }
+            else if(base->type==JSONType::object){
+                (*base)[lastelm]=*value;
+            }
+            return true;
+        }
+    //public:
+        JSON patch(const JSON& from)const{
+            if(from.type!=JSONType::array)return JSON();
+            JSON copy=*this;
+            size_t i=0;
+            for(auto op=from.idx(i);op;op=from.idx(++i)){
+                auto opkind=op->idx("op");
+                auto path=op->idx("path");
+                if(!opkind||!path)return JSON();
+                std::string opname;
+                std::string pathname;
+                if(!opkind->try_get(opname)){
+                    return JSON();
+                }
+                if(!path->try_get(pathname)){
+                    return JSON();
+                }
+                std::string lastelm;
+                bool insertok=false;
+                JSON* base=copy.pointer(pathname,lastelm,insertok,true);
+                if(!base)return JSON();
+                if(opname=="add"){
+                    if(!patch_add(base,op,lastelm))return JSON();
+                }
+            }
+        }
+
+        JSON merge(const JSON& from){
+            return JSON();
+        }
     };
 
     inline JSON operator""_json(const char* in,size_t size){   
-        JSON js;
-        js.parse_assign(std::string(in,size));
-        return js;
+        return JSON::parse(std::string(in,size));
     }
         
     using JSONObject=JSON::JSONObjectType;

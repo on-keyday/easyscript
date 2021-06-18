@@ -78,6 +78,7 @@
         "sstream": "cpp",
         "stop_token": "cpp",
         "thread": "cpp",
-        "chibicc.h": "c"
+        "chibicc.h": "c",
+        "regex": "cpp"
     }
 }

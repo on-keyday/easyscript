@@ -6,6 +6,9 @@
 
 #pragma once
 #include"basic_helper.h"
+#include<string>
+#include<algorithm>
+
 namespace PROJECT_NAME{
     template<class Map,class Val>
     struct HTTPHeaderContext{
@@ -126,18 +129,9 @@ namespace PROJECT_NAME{
     template<class Buf,class Header,class Recver>
     struct HTTPBodyContext{
         size_t strtosz(Buf& str,bool& res,int base=10){
-            try{
-                if(sizeof(size_t)==4){
-                    return std::stoul(str,nullptr,base);
-                }
-                else{
-                    return std::stoull(str,nullptr,base);
-                }
-            }
-            catch(...){
-                res=false;
-                return 0;
-            }
+            size_t p=0;
+            res=parse_int(str.data(),&str.data()[str.size()],p,base);
+            return p;
         }
         Recver& recv;
         Header& header;

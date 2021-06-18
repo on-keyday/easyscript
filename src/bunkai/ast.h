@@ -9,8 +9,9 @@
 #include"typeast.h"
 namespace ast{
 
-    template<class Buf=std::string,class TyPool=ast::type::TypePool>
+    template<class Buf=std::string>
     struct AstReader{
+        using TyPool=ast::type::TypePool;
     private:
         PROJECT_NAME::Reader<Buf> r;
         std::vector<AstToken*> temp;
@@ -123,6 +124,25 @@ namespace ast{
             return false;
         }
 
+        bool Member(AstToken*& tok){
+            assert(tok);
+            if(r.expect(".")){
+                AstToken* tmp=new_AstToken();
+                tmp->kind=AstKind::op_member;
+                tmp->str=".";
+                tmp->left=tok;
+                tok=tmp;
+                if(!Identifier(tok->right)){
+                    return error("member:expected identifier but not");
+                }
+                if(tok->right->str=="_"){
+                    return error("member:_ is placeholder symbol so not usable for member");
+                }
+                return true;
+            }
+            return false;
+        }
+
         bool After(AstToken*& tok){
             assert(tok);
             bool f=false;
@@ -144,19 +164,108 @@ namespace ast{
             return false;
         }
 
-        bool Number(AstToken*& tok){
-            if(PROJECT_NAME::is_digit(r.achar())){
-                auto ret=new_AstToken();
-                PROJECT_NAME::NumberContext<char> c;
-                r.readwhile(ret->str,PROJECT_NAME::number,&c);
-                if(c.failed)return error("number:invalid number");
-                if(c.floatf){
-                    ret->kind=AstKind::floatn;
+        bool NumberSuffix(AstToken*& tok,bool floatf,int radix){
+            int size=4;
+            bool sign=true;
+            if(r.expect("h")||r.expect("H")){
+                size=2;
+            }
+            if(r.expect("f")||r.expect("F")){
+                floatf=true;
+                size=4;
+            }
+            if(floatf){
+                tok->kind=AstKind::floatn;
+                if(size==4){
+                    tok->type=pool.keyword("float");
                 }
                 else{
-                    ret->kind=AstKind::intn;
+                    tok->type=pool.keyword("double");
                 }
-                tok=ret;
+            }
+            else{
+                tok->kind=AstKind::intn;
+                if(r.expect("h")||r.expect("H")){
+                    size=1;
+                }
+                if(r.expect("u")||r.expect("U")){
+                    sign=false;
+                }
+                if(size==4&&(r.expect("l")||r.expect("L"))){
+                    size=8;
+                }
+                int ofs=0;
+                if(radix==16||radix==2){
+                    ofs=2;
+                }
+                else if(radix==8){
+                    ofs=1;
+                }
+                size_t t=0;
+                if(!PROJECT_NAME::parse_int(
+                    &tok->str.data()[ofs],&tok->str.data()[tok->str.size()],
+                    t,radix)){
+                    return error("undecodable number");
+                }
+                auto signv=PROJECT_NAME::need_bytes(t,false);
+                auto unsignv=PROJECT_NAME::need_bytes(t,true);
+                if(signv==-1){
+                    sign=false;
+                }
+                if(sign){
+                    if(size<signv){
+                        size=signv;
+                    }
+                    switch (size<signv?signv:size)
+                    {
+                    case 1:
+                        tok->type=pool.keyword("int8");
+                        break;
+                    case 2:
+                        tok->type=pool.keyword("int16");
+                        break;
+                    case 4:
+                        tok->type=pool.keyword("int32");
+                        break;
+                    case 8:
+                        tok->type=pool.keyword("int64");
+                        break;
+                    default:
+                        assert(false&&"unreachable");
+                    }
+                }
+                else{
+                    switch (size<unsignv?unsignv:size)
+                    {
+                    case 1:
+                        tok->type=pool.keyword("uint8");
+                        break;
+                    case 2:
+                        tok->type=pool.keyword("uint16");
+                        break;
+                    case 4:
+                        tok->type=pool.keyword("uint32");
+                        break;
+                    case 8:
+                        tok->type=pool.keyword("uint64");
+                        break;
+                    default:
+                        assert(false&&"unreachable");
+                    }
+                }
+            }
+            return true;
+        }
+
+        bool Number(AstToken*& tok){
+            if(PROJECT_NAME::is_digit(r.achar())){
+                tok=new_AstToken();
+                auto tmp=r.set_ignore(nullptr);
+                PROJECT_NAME::NumberContext<char> c;
+                r.readwhile(tok->str,PROJECT_NAME::number,&c);
+                if(c.failed)return error("number:invalid number");
+                NumberSuffix(tok,c.floatf,c.radix);
+                r.set_ignore(tmp);
                 return true;
             }
             return false;
@@ -167,12 +276,14 @@ namespace ast{
                 tok=new_AstToken();
                 tok->str="true";
                 tok->kind=AstKind::boolean;
+                tok->type=pool.keyword("bool");
                 return true;
             }
             else if(r.expect("true",PROJECT_NAME::is_c_id_usable)){
                 tok=new_AstToken();
                 tok->str="false";
                 tok->kind=AstKind::boolean;
+                tok->type=pool.keyword("bool");
                 return true;
             }
             return false;
@@ -183,6 +294,7 @@ namespace ast{
                 tok=new_AstToken();
                 tok->str="null";
                 tok->kind=AstKind::null;
+                tok->type=pool.keyword("null");
                 return true;
             }
             return false;
@@ -194,9 +306,6 @@ namespace ast{
                 tok->kind=AstKind::func_literal;
                 if(PROJECT_NAME::is_c_id_top_usable(r.achar())){
                     IdRead(tok->str);
-                }
-                if(!r.expect("(")){
-                    return error("func literal:expected ( but not");
                 }
                 tr.func_read(tok->type,true);
                 if(!r.expect("{")){
@@ -242,6 +351,7 @@ namespace ast{
                 if(!ScopedIdentifier(tok->right)){
                     return error("scope:expected identifier but not");
                 }
+                return true;
             }
             return false;
         }

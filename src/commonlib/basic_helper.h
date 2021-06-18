@@ -7,8 +7,8 @@
 #pragma once
 #include"reader.h"
 #include<cstring>
-#include<algorithm>
-#include<string>
+
+
 namespace PROJECT_NAME{
 
     template<class Buf>
@@ -37,10 +37,16 @@ namespace PROJECT_NAME{
 
     template<class Char>
     struct NumberContext{
+        Char dotsymbol=(Char)'.';
+        bool strict=false;
+        bool must_sandwichdot=false;
+        
+
         int radix=0;
         bool floatf=false;
         bool expf=false;
         bool failed=false;
+        bool mustfloat=false;
         bool (*judgenum)(Char)=nullptr;
     };
 
@@ -106,103 +112,6 @@ namespace PROJECT_NAME{
         return is_alpha_or_num(c)||c==(Char)'+';
     }
 
-    template<class Buf,class Ret,class Char>
-    bool number(Reader<Buf>* self,Ret& ret,NumberContext<Char>*& ctx,bool begin){
-        if(!ctx)return !begin;
-        if(!self){
-            return true;
-        }
-        auto n=self->achar();
-        auto increment=[&]{
-            ret.push_back(n);
-            self->increment();
-            n=self->achar();
-        };
-        if(begin){
-            ctx->expf=false;
-            ctx->failed=false;
-            ctx->floatf=false;
-            ctx->judgenum=nullptr;
-            ctx->radix=0;
-            if(is_digit(n)){
-                if(n!=(Char)'0'){
-                    ctx->radix=10;
-                    ctx->judgenum=is_digit;
-                }
-                increment();
-                return true;
-            }
-            else{
-                ctx->failed=true;
-                return false;
-            }
-        }
-        bool proc=true,must=false;
-        if(ctx->radix==0){
-            if(n==(Char)'x'||n==(Char)'X'){
-                ctx->radix=16;
-                ctx->judgenum=is_hex;
-            }
-            else if(n==(Char)'b'||n==(Char)'B'){
-                ctx->radix=2;
-                ctx->judgenum=is_bin;
-            }
-            else if(is_oct(n)){
-                ctx->radix=8;
-                ctx->judgenum=is_oct;
-                proc=false;
-            }
-            else if(n==(Char)'.'){
-                ctx->floatf=true;
-                ctx->judgenum=is_digit;
-                ctx->radix=10;
-            }
-            else{
-                ctx->radix=10;
-                return true;
-            }
-            if(proc){
-                increment();
-                must=true;
-            }
-        }
-        else if(n==(Char)'.'){
-            if(ctx->floatf){
-                ctx->failed=true;
-                return true;
-            }
-            ctx->floatf=true;
-            increment();
-            must=true;
-        }
-        else if((ctx->radix==10&&(n==(Char)'e'||n==(Char)'E'))||
-                (ctx->radix==16&&(n==(Char)'p'||n==(Char)'P'))){
-            if(ctx->expf){
-                ctx->failed=true;
-                return true;
-            }
-            ctx->expf=true;
-            ctx->floatf=true;
-            increment();
-            if(n!=(Char)'+'&&n!=(Char)'-'){
-                ctx->failed=true;
-                return true;
-            }
-            //ctx->radix=10;
-            ctx->judgenum=is_digit<Char>;
-            increment();
-            must=true;
-        }
-        if(proc){
-            if(!ctx->judgenum)return true;
-            if(!ctx->judgenum(n)){
-                if(must)ctx->failed=true;
-                return true;
-            }
-        }
-        ret.push_back(n);
-        return false;
-    }
 
     template<class Buf,class Ctx>
     bool depthblock(Reader<Buf>* self,Ctx& check,bool begin){
@@ -399,5 +308,375 @@ namespace PROJECT_NAME{
             }
         }
         return true;
+    }
+    inline namespace old{
+    template<class Buf,class Ret,class Char>
+        bool number_old(Reader<Buf>* self,Ret& ret,NumberContext<Char>*& ctx,bool begin){
+            if(!ctx)return !begin;
+            if(!self){
+                return true;
+            }
+            auto n=self->achar();
+            auto increment=[&]{
+                ret.push_back(n);
+                self->increment();
+                n=self->achar();
+            };
+            if(begin){
+                ctx->expf=false;
+                ctx->failed=false;
+                ctx->floatf=false;
+                ctx->judgenum=nullptr;
+                ctx->radix=0;
+                if(is_digit(n)){
+                    if(n!=(Char)'0'){
+                        ctx->radix=10;
+                        ctx->judgenum=is_digit;
+                    }
+                    increment();
+                    return true;
+                }
+                else{
+                    ctx->failed=true;
+                    return false;
+                }
+            }
+            bool proc=true,must=false;
+            if(ctx->radix==0){
+                if(n==(Char)'x'||n==(Char)'X'){
+                    ctx->radix=16;
+                    ctx->judgenum=is_hex;
+                }
+                else if(n==(Char)'b'||n==(Char)'B'){
+                    ctx->radix=2;
+                    ctx->judgenum=is_bin;
+                }
+                else if(is_oct(n)){
+                    ctx->radix=8;
+                    ctx->judgenum=is_oct;
+                    proc=false;
+                }
+                else if(n==(Char)'.'){
+                    ctx->floatf=true;
+                    ctx->judgenum=is_digit;
+                    ctx->radix=10;
+                }
+                else{
+                    ctx->radix=10;
+                    return true;
+                }
+                if(proc){
+                    increment();
+                    must=true;
+                }
+            }
+            else if(n==(Char)'.'){
+                if(ctx->floatf){
+                    ctx->failed=true;
+                    return true;
+                }
+                ctx->floatf=true;
+                increment();
+                must=true;
+            }
+            else if((ctx->radix==10&&(n==(Char)'e'||n==(Char)'E'))||
+                    (ctx->radix==16&&(n==(Char)'p'||n==(Char)'P'))){
+                if(ctx->expf){
+                    ctx->failed=true;
+                    return true;
+                }
+                ctx->expf=true;
+                ctx->floatf=true;
+                increment();
+                if(n!=(Char)'+'&&n!=(Char)'-'){
+                    ctx->failed=true;
+                    return true;
+                }
+                //ctx->radix=10;
+                ctx->judgenum=is_digit<Char>;
+                increment();
+                must=true;
+            }
+            if(proc){
+                if(!ctx->judgenum)return true;
+                if(!ctx->judgenum(n)){
+                    if(must)ctx->failed=true;
+                    return true;
+                }
+            }
+            ret.push_back(n);
+            return false;
+        }
+    }
+
+    template<class Buf,class Ret,class Char>
+    bool number(Reader<Buf>* self,Ret& ret,NumberContext<Char>*& ctx,bool begin){
+        if(!ctx)return !begin;
+        if(!self){
+            if(ctx->mustfloat&&!ctx->floatf)ctx->failed=true;
+            if(ctx->strict&&ctx->radix==16&&!ctx->expf)ctx->failed=true;
+            return true;
+        }
+        auto n=self->achar();
+        auto increment=[&]{
+            ret.push_back(n);
+            self->increment();
+            n=self->achar();
+        };
+        if(begin){
+            //ctx->beginpos=self->readpos();
+            ctx->expf=false;
+            ctx->failed=false;
+            ctx->floatf=false;
+            ctx->judgenum=nullptr;
+            ctx->radix=0;
+            ctx->mustfloat=false;
+            return true;
+        }
+        bool must=false;
+        if(ctx->radix==0){
+            if(self->expect("0x")){
+                ctx->radix=16;
+                ctx->judgenum=is_hex;
+                ret.push_back((Char)'0');
+                ret.push_back((Char)'x');
+                if(self->achar()==ctx->dotsymbol){
+                    if(!ctx->must_sandwichdot){
+                        ctx->failed=true;
+                        return true;
+                    }
+                    increment();
+                    ctx->floatf=true;
+                }
+            }
+            else if(self->expect("0b")){
+                ctx->radix=2;
+                ctx->judgenum=is_bin;
+                ret.push_back((Char)'0');
+                ret.push_back((Char)'b');
+            }
+            else if(self->expect("0",[](Char c){return !is_oct(c);})){
+                ctx->radix=8;
+                ctx->judgenum=is_oct;
+                ret.push_back((Char)'0');
+            }
+            else if(self->expect("0",[](Char c){return !is_digit(c);})){
+                ctx->mustfloat=true;
+                ctx->radix=10;
+                ctx->judgenum=is_digit;
+                ret.push_back((Char)'0');
+            }
+            else if(n==ctx->dotsymbol){
+                if(!ctx->must_sandwichdot){
+                    ctx->failed=true;
+                    return true;
+                }
+                ctx->radix=10;
+                ctx->judgenum=is_digit;
+                ctx->floatf=true;
+                increment();
+            }
+            else if(is_digit(n)){
+                ctx->radix=10;
+                ctx->judgenum=is_digit;
+            }
+            else{
+                ctx->failed=true;
+                return true;
+            }
+            must=true;
+        }
+        bool dot=false;
+        if(n==ctx->dotsymbol){
+            if(ctx->floatf){
+                ctx->failed=true;
+                return true;
+            }
+            ctx->floatf=true;
+            if(ctx->radix==8){
+                ctx->radix=10;
+            }
+            increment();
+            dot=true;
+        }
+        if((
+            (ctx->radix==10||ctx->radix==8)&&(n==(Char)'e'||n==(Char)'E')
+           )||(ctx->radix==16&&(n==(Char)'p'||n==(Char)'P'))){
+            if(ctx->expf){
+                ctx->failed=true;
+                return true;
+            }
+            if(ctx->must_sandwichdot&&dot){
+                ctx->failed=true;
+                return true;
+            }
+            ctx->expf=true;
+            ctx->floatf=true;
+            increment();
+            if(n!=(Char)'+'&&n!=(Char)'-'){
+                ctx->failed=true;
+                return true;
+            }
+            ctx->judgenum=is_digit;
+            if(ctx->radix==8){
+                ctx->radix=10;
+            }
+            increment();
+            must=true;
+        }
+        if(!ctx->judgenum(n)){
+            if(ctx->radix==8&&is_digit(n)){
+                ctx->mustfloat=true;
+                ctx->judgenum=is_digit;
+            }
+            else{
+                if(must)ctx->failed=true;
+                if(ctx->mustfloat&&!ctx->floatf)ctx->failed=true;
+                if(ctx->strict&&ctx->radix==16&&!ctx->expf)ctx->failed=true;
+                if(ctx->must_sandwichdot&&dot)ctx->failed=true;
+                return true;
+            }
+        }
+        ret.push_back(n);
+        return false;
+    }
+
+
+}
+
+#if(__cplusplus<201703L)||(defined(__GNUC__) && __GNUC__ < 11)
+#include<string>
+#endif
+#if __cplusplus>=201703L
+#include<charconv>
+#endif
+
+namespace PROJECT_NAME{
+    template<class N>
+    constexpr N msb_on(){
+        return static_cast<N>(1)<<static_cast<N>(sizeof(N)*8-1);
+    }
+
+    template<class N>
+    constexpr bool is_unsigned(){
+        return msb_on<N>() > 0;
+    }
+
+    template<class N>
+    constexpr N maxof(){
+        return is_unsigned<N>()?static_cast<N>(~0):~msb_on<N>();
+    }
+
+    template<class N>
+    constexpr N minof(){
+        return is_unsigned<N>()?0:msb_on<N>();
+    }
+
+    constexpr unsigned long long maxvalue(int size,bool sign=false){
+        switch(size){
+        case 1:return sign?maxof<char>():maxof<unsigned char>();
+        case 2:return sign?maxof<short>():maxof<unsigned short>();
+        case 4:return sign?maxof<int>():maxof<unsigned int>();
+        case 8:return sign?maxof<long long>():maxof<unsigned long long>();
+        }
+        return -1;
+    }
+
+    constexpr int need_bytes(unsigned long long s,bool sign){
+        if(sign){
+            if(s>maxof<long long>()){
+                return -1;
+            }
+            else if(s>maxof<int>()){
+                return 8;
+            }
+            else if(s>maxof<short>()){
+                return 4;
+            }
+            else if(s>maxof<char>()){
+                return 2;
+            }
+            else{
+                return 1;
+            }
+        }
+        else{
+            if(s>maxof<unsigned int>()){
+                return 8;
+            }
+            else if(s>maxof<unsigned short>()){
+                return 4;
+            }
+            else if(s>maxof<unsigned char>()){
+                return 2;
+            }
+            else{
+                return 1;
+            }
+        }
+    }
+
+   
+
+    template<class N>
+    bool parse_int(const char* be,const char* ed,N& n,int radix=10){
+#if __cplusplus < 201703L
+        try{
+            size_t idx=0;
+            unsigned long long t=stoull(std::string(be,ed),&idx,radix);
+            if(static_cast<size_t>(ed-be)!=idx){
+                return false;
+            }
+            if(need_bytes(t)>sizeof(N))return false;
+            n=(N)t;
+        }
+        catch(...){
+            return false;
+        }
+#else
+        auto res=std::from_chars(be,ed,n,radix);
+        if(res.ec!=std::errc{}){
+            return false;
+        }
+        if(res.ptr!=ed){
+            return false;
+        }
+#endif
+        return true;
+    }
+
+    template<class N>
+    bool parse_float(const char* be,const char* ed,N& n,bool hex=false){
+#if (__cplusplus<201703L)||(defined(__GNUC__) && __GNUC__ < 11)
+        try{
+            size_t idx=0;
+            n=(N)std::stod(std::string(be,ed),&idx);
+            if(static_cast<size_t>(ed-be)!=idx){
+                return false;
+            }
+        }
+        catch(...){
+            return false;
+        }
+#else
+        auto res=std::from_chars(be,ed,n,hex?std::chars_format::hex:std::chars_format::general);
+        if(res.ec!=std::errc{}){
+            return false;
+        }
+        if(res.ptr!=ed){
+            return false;
+        }
+#endif
+        return true;
+    }
+
+    template<class Str,class N>
+    bool parse_int(const Str& str,N& n,int radix=10){
+        return parse_int(str.data(),&str.data()[str.size()],n,radix);
+    }
+
+    template<class Str,class N>
+    bool parse_float(const Str& str,N& n,bool hex=false){
+        return parse_float(str.data(),&str.data()[str.size()],n,hex);
     }
 }

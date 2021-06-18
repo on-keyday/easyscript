@@ -49,6 +49,7 @@ namespace ast{
         op_init,
         op_call,
         op_index,
+        op_member,
         func_literal,
 
         if_stmt,
@@ -134,6 +135,7 @@ namespace ast{
             temporary,
             array,
             vector,
+            constant,
             function,
             generic,
             structs,
@@ -162,10 +164,13 @@ namespace ast{
             Type* base=nullptr;
             AstToken* token=nullptr;
 
+            bool generic_relative=false;
+
             Type* ptrto=nullptr;
             Type* tmpof=nullptr;
             Type* refof=nullptr;
             Type* vecof=nullptr;
+            Type* constof=nullptr;
 
             AstList<Object> param;
 
@@ -191,10 +196,23 @@ namespace ast{
             }
         };
 
+        struct Scope{
+            Scope* prev=nullptr;
+            std::map<std::string,Scope> children;
+            std::map<std::string,Object*> functions;
+            std::map<std::string,Object*> variables;
+            std::map<std::string,Type*> types;
+            bool tmp=false;
+            ~Scope(){
+                assert(!tmp&&"tmpscope not leaved.");
+            }
+        };
+
         struct TypePool{
             std::vector<Type*> pool;
             std::vector<Object*> obj;
-            //size_t pos=1;
+            Scope globalscope;
+            Scope* currentscope=&globalscope;
 
             void delall(){
                 for(auto r:pool){
@@ -227,6 +245,7 @@ namespace ast{
                     t->ptrto=new_Type();
                     t->ptrto->kind=TypeKind::pointer;
                     t->ptrto->base=t;
+                    t->ptrto->generic_relative=t->generic_relative;
                 }
                 return t->ptrto;
             }
@@ -237,6 +256,7 @@ namespace ast{
                     t->refof=new_Type();
                     t->refof->kind=TypeKind::reference;
                     t->refof->base=t;
+                    t->refof->generic_relative=t->generic_relative;
                 }
                 return t->refof;
             }
@@ -247,6 +267,7 @@ namespace ast{
                     t->tmpof=new_Type();
                     t->tmpof->kind=TypeKind::temporary;
                     t->tmpof->base=t;
+                    t->tmpof->generic_relative=t->generic_relative;
                 }
                 return t->tmpof;
             }
@@ -257,6 +278,7 @@ namespace ast{
                     t->vecof=new_Type();
                     t->vecof->kind=TypeKind::vector;
                     t->vecof->base=t;
+                    t->vecof->generic_relative=t->generic_relative;
                 }
                 return t->vecof;
             }
@@ -267,7 +289,22 @@ namespace ast{
                 ret->token=tok;
                 ret->base=t;
                 ret->kind=TypeKind::array;
+                ret->generic_relative=t->generic_relative;
                 return ret;
+            }
+
+            Type* const_of(Type* t){
+                assert(t);
+                if(t->kind==TypeKind::constant){
+                    throw "type:double const is invalid";
+                }
+                if(!t->constof){
+                    t->constof=new_Type();
+                    t->constof->kind=TypeKind::constant;
+                    t->constof->base=t;
+                    t->constof->generic_relative=t->generic_relative;
+                }
+                return t->constof;
             }
 
             Type* function(Type* ret,AstList<Object>& param){
@@ -281,6 +318,7 @@ namespace ast{
             Type* generic(){
                 Type* t=new_Type();
                 t->kind=TypeKind::generic;
+                t->generic_relative=true;
                 return t;
             }
 
@@ -296,6 +334,58 @@ namespace ast{
 
             Type* identifier(const char* t){
                 throw "identifier:unimplemented";
+            }
+
+            bool enterscope(const std::string& name){
+                assert(currentscope);
+                if(!currentscope->children.count(name)){
+                    return false;
+                }
+                currentscope=&currentscope->children[name];
+                return true;           
+            }
+
+            bool leavescope(const std::string& name){
+                assert(currentscope);
+                if(!currentscope->prev){
+                    return false;
+                }
+                currentscope->tmp=false;
+                currentscope=currentscope->prev;
+                return true;
+            }
+
+            bool makescope(const std::string& name){
+                assert(currentscope);
+                if(currentscope->children.count(name)){
+                    return false;
+                }
+                auto& ref=currentscope->children[name];
+                ref.prev=currentscope;
+                return true;
+            }
+
+            bool tmpscope(Scope& scope,AstList<Object>* var,AstList<Object>* func){
+                if(var){
+                    for(auto p=var->node;p;p=p->next){
+                        if(scope.variables.count(p->name)){
+                            throw "scope:variablee name conflict";
+                        }
+                        scope.variables[p->name]=p;
+                    }
+                }
+                if(func){
+                    for(auto p=func->node;p;p=p->next){
+                        if(scope.functions.count(p->name)){
+                            throw "scope:function name conflict";
+                        }
+                        scope.functions[p->name]=p;
+                    }
+                }
+                scope.tmp=true;
+                scope.prev=currentscope;
+                currentscope=&scope;
+                return true;
             }
         };
     }

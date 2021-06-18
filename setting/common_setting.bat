@@ -4,7 +4,7 @@ rem     Released under the MIT license
 rem     https://opensource.org/licenses/mit-license.php
 set PROJECT_BASE=..\src
 set PROJECT_COPY=false
-set BUILD_MODE=Release
+set BUILD_MODE=Debug
 set CMAKE_GENERATOR=Ninja
 set RUN_GENERATOR=ninja
 set RUNEXECUTABLE=program

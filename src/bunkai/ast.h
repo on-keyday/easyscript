@@ -14,16 +14,15 @@ namespace ast{
         using TyPool=ast::type::TypePool;
     private:
         PROJECT_NAME::Reader<Buf> r;
-        std::vector<AstToken*> temp;
+        //std::vector<SAstToken> temp;
         TyPool& pool;
         type::TypeAstReader<AstReader,Buf> tr;
 
-        AstToken* new_AstToken(){
+        SAstToken new_AstToken(){
             auto ret=ast::new_<AstToken>();
-            temp.push_back(ret);
-            return ret;
+            //temp.push_back(ret);
+            return SAstToken(ret,ast::delete_<AstToken>);
         }
-
 
         bool error(const char* str){
             throw str;
@@ -39,7 +38,7 @@ namespace ast{
                e("float")||e("double")||e("int")||e("uint")||e("bool")||e("void")||
                e("int8")||e("int16")||e("int32")||e("int64")||
                e("uint8")||e("uint16")||e("uint32")||e("uint64")||
-               e("null")||e("true")||e("false")||e("cast")
+               e("null")||e("true")||e("false")||e("cast")||e("type")||e("use")
             ){
                 return error("identifier:keyword is not usable for identifier");
             }
@@ -53,9 +52,9 @@ namespace ast{
             return true;
         }
 
-        bool Call(AstToken*& tok){
+        bool Call(SAstToken& tok){
             if(r.expect("(")){
-                AstToken* tmp=new_AstToken();
+                SAstToken tmp=new_AstToken();
                 tmp->str="()";
                 tmp->kind=AstKind::op_call;
                 tmp->right=tok;
@@ -78,13 +77,13 @@ namespace ast{
             return false;
         }
 
-        bool Index(AstToken*& tok){
+        bool Index(SAstToken& tok){
             if(r.expect("[")){
-                AstToken* tmp=new_AstToken();
+                SAstToken tmp=new_AstToken();
                 tmp->str="[]";
                 tmp->kind=AstKind::op_index;
-                tmp->right=tok;
-                tok=tmp;
+                tmp->right=std::move(tok);
+                tok=std::move(tmp);
                 Expr(tok->left);
                 if(!r.expect("]")){
                     return error("index:expected ] but not");
@@ -94,13 +93,13 @@ namespace ast{
             return false;
         }
 
-        bool AfterIncrement(AstToken*& tok){
+        bool AfterIncrement(SAstToken& tok){
             if(r.expect("++")){
-                AstToken* tmp=new_AstToken();
+                SAstToken tmp=new_AstToken();
                 tmp->str="++";
                 tmp->kind=AstKind::op_add_eq;
-                tmp->left=tok;
-                tok=tmp;
+                tmp->left=std::move(tok);
+                tok=std::move(tmp);
                 tok->right=new_AstToken();
                 tok->right->kind=AstKind::intn;
                 tok->right->str="1";
@@ -109,13 +108,13 @@ namespace ast{
             return false;
         }
 
-        bool AfterDecrement(AstToken*& tok){
+        bool AfterDecrement(SAstToken& tok){
             if(r.expect("--")){
-                AstToken* tmp=new_AstToken();
+                SAstToken tmp=new_AstToken();
                 tmp->str="-=";
                 tmp->kind=AstKind::op_sub_eq;
-                tmp->left=tok;
-                tok=tmp;
+                tmp->left=std::move(tok);
+                tok=std::move(tmp);
                 tok->right=new_AstToken();
                 tok->right->kind=AstKind::intn;
                 tok->right->str="1";
@@ -124,14 +123,14 @@ namespace ast{
             return false;
         }
 
-        bool Member(AstToken*& tok){
+        bool Member(SAstToken& tok){
             assert(tok);
             if(r.expect(".")){
-                AstToken* tmp=new_AstToken();
+                SAstToken tmp=new_AstToken();
                 tmp->kind=AstKind::op_member;
                 tmp->str=".";
-                tmp->left=tok;
-                tok=tmp;
+                tmp->left=std::move(tok);
+                tok=std::move(tmp);
                 if(!Identifier(tok->right)){
                     return error("member:expected identifier but not");
                 }
@@ -143,17 +142,17 @@ namespace ast{
             return false;
         }
 
-        bool After(AstToken*& tok){
+        bool After(SAstToken& tok){
             assert(tok);
             bool f=false;
-            while(Call(tok)||Index(tok)||AfterIncrement(tok)||AfterDecrement(tok)){
+            while(Call(tok)||Index(tok)||Member(tok)||AfterIncrement(tok)||AfterDecrement(tok)){
                 assert(tok);
                 f=true;
             }
             return f;
         }
 
-        bool String(AstToken*& tok){
+        bool String(SAstToken& tok){
             if(r.achar()=='\"'||r.achar()=='\''){
                 auto ret=new_AstToken();
                 ret->kind=AstKind::string;
@@ -164,7 +163,7 @@ namespace ast{
             return false;
         }
 
-        bool NumberSuffix(AstToken*& tok,bool floatf,int radix){
+        bool NumberSuffix(SAstToken& tok,bool floatf,int radix){
             int size=4;
             bool sign=true;
             if(r.expect("h")||r.expect("H")){
@@ -257,7 +256,7 @@ namespace ast{
             return true;
         }
 
-        bool Number(AstToken*& tok){
+        bool Number(SAstToken& tok){
             if(PROJECT_NAME::is_digit(r.achar())){
                 tok=new_AstToken();
                 auto tmp=r.set_ignore(nullptr);
@@ -271,7 +270,7 @@ namespace ast{
             return false;
         }
 
-        bool BoolLiteral(AstToken*& tok){
+        bool BoolLiteral(SAstToken& tok){
             if(r.expect("true",PROJECT_NAME::is_c_id_usable)){
                 tok=new_AstToken();
                 tok->str="true";
@@ -279,7 +278,7 @@ namespace ast{
                 tok->type=pool.keyword("bool");
                 return true;
             }
-            else if(r.expect("true",PROJECT_NAME::is_c_id_usable)){
+            else if(r.expect("false",PROJECT_NAME::is_c_id_usable)){
                 tok=new_AstToken();
                 tok->str="false";
                 tok->kind=AstKind::boolean;
@@ -289,7 +288,7 @@ namespace ast{
             return false;
         }
 
-        bool NullLiteral(AstToken*& tok){
+        bool NullLiteral(SAstToken& tok){
             if(r.expect("null",PROJECT_NAME::is_c_id_usable)){
                 tok=new_AstToken();
                 tok->str="null";
@@ -300,24 +299,38 @@ namespace ast{
             return false;
         }
 
-        bool Func(AstToken*& tok){
+        bool Func(SAstToken& tok){
             if(r.expect("func",PROJECT_NAME::is_c_id_usable)){
                 tok=new_AstToken();
                 tok->kind=AstKind::func_literal;
+                bool id=false;
                 if(PROJECT_NAME::is_c_id_top_usable(r.achar())){
                     IdRead(tok->str);
+                    id=true;
                 }
                 tr.func_read(tok->type,true);
                 if(!r.expect("{")){
                     return error("func literal:expected { but not");
                 }
+                if(id){
+                    auto nm="func "+tok->str;
+                    if(!pool.makescope(nm)){
+                        return error("func literal:func name conflict");
+                    }
+                    pool.enterscope(nm);
+                }
+                else{
+                    tok->scope=pool.unnamed_scope("func ");
+                }
                 Block(tok->block);
+                auto f=pool.leavescope();
+                assert(f);
                 return true;
             }
             return false;
         }
 
-        bool Identifier(AstToken*& tok){
+        bool Identifier(SAstToken& tok){
             if(PROJECT_NAME::is_c_id_top_usable(r.achar())){
                 tok=new_AstToken();
                 tok->kind=AstKind::identifier;
@@ -328,7 +341,7 @@ namespace ast{
             return false;
         }
 
-        bool ScopedIdentifier(AstToken*& tok){
+        bool ScopedIdentifier(SAstToken& tok){
             if(Identifier(tok)){
                 if(r.expect("::")){
                     auto n=new_AstToken();
@@ -344,7 +357,7 @@ namespace ast{
             return false;
         }
 
-        bool GlobalScopedIdentifier(AstToken*& tok){
+        bool GlobalScopedIdentifier(SAstToken& tok){
             if(r.expect("::")){
                 tok=new_AstToken();
                 tok->kind=AstKind::op_scope;
@@ -356,14 +369,14 @@ namespace ast{
             return false;
         }
 
-        bool Primary(AstToken*& tok){
+        bool Primary(SAstToken& tok){
             return (String(tok)||Number(tok)||BoolLiteral(tok)||NullLiteral(tok)||Func(tok)||
                    ScopedIdentifier(tok)||GlobalScopedIdentifier(tok)||
                    error("primary:expect primary object but not"))&&
                    (After(tok)||true);
         }
 
-        bool Increment(AstToken*& tok){
+        bool Increment(SAstToken& tok){
             if(r.expect("++")){
                 tok=new_AstToken();
                 tok->str="+=";
@@ -379,7 +392,7 @@ namespace ast{
             return false;
         }
 
-        bool Decrement(AstToken*& tok){
+        bool Decrement(SAstToken& tok){
             if(r.expect("--")){
                 tok=new_AstToken();
                 tok->str="-=";
@@ -395,7 +408,7 @@ namespace ast{
             return false;
         }
 
-        bool BitNot(AstToken*& tok){
+        bool BitNot(SAstToken& tok){
             if(r.expect("~")){
                 tok=new_AstToken();
                 tok->kind=AstKind::op_bitnot;
@@ -408,7 +421,7 @@ namespace ast{
             return false;
         }
 
-        bool LogicalNot(AstToken*& tok){
+        bool LogicalNot(SAstToken& tok){
             if(r.expect("!")){
                 tok=new_AstToken();
                 tok->kind=AstKind::op_logicalnot;
@@ -421,14 +434,14 @@ namespace ast{
             return false;
         }
 
-        bool SinglePlus(AstToken*& tok){
+        bool SinglePlus(SAstToken& tok){
             if(r.expect("+")){
                 return Unary(tok);
             }
             return false;
         }
 
-        bool SingleMinus(AstToken*& tok){
+        bool SingleMinus(SAstToken& tok){
             if(r.expect("-")){
                 tok=new_AstToken();
                 tok->kind=AstKind::op_sub;
@@ -444,7 +457,7 @@ namespace ast{
             return false;
         }
 
-        bool Address(AstToken*& tok){
+        bool Address(SAstToken& tok){
             if(r.expect("&")){
                 tok=new_AstToken();
                 tok->kind=AstKind::op_addr;
@@ -457,7 +470,7 @@ namespace ast{
             return false;
         }
 
-        bool Dereference(AstToken*& tok){
+        bool Dereference(SAstToken& tok){
             if(r.expect("*")){
                 tok=new_AstToken();
                 tok->kind=AstKind::op_deref;
@@ -470,20 +483,35 @@ namespace ast{
             return false;
         }
 
-        bool Unary(AstToken*& tok){
+        bool Cast(SAstToken& tok){
+            if(r.expect("cast",PROJECT_NAME::is_c_id_usable)){
+                if(!r.expect("<"))return error("cast:expected < but not");
+                tok=new_AstToken();
+                tok->kind=AstKind::op_cast;
+                tr.read_type(tok->type);
+                if(!r.expect(">"))return error("cast:expected > but not");
+                if(!r.expect("("))return error("cast:expected ( but not");
+                Expr(tok->right);
+                if(!r.expect(")"))return error("cast:expected ) but not");
+                return true;
+            }
+            return false;
+        }
+
+        bool Unary(SAstToken& tok){
             return Increment(tok)||Decrement(tok)||SinglePlus(tok)||BitNot(tok)||LogicalNot(tok)||
-                   SingleMinus(tok)||Address(tok)||Dereference(tok)||Primary(tok);
+                   SingleMinus(tok)||Address(tok)||Dereference(tok)||Cast(tok)||Primary(tok);
         }
 
         template<class Func>
-        inline bool Bin(AstKind kind,const char* str,const char* err,Func func,AstToken*& tok){
+        inline bool Bin(AstKind kind,const char* str,const char* err,Func func,SAstToken& tok){
             assert(tok);
             if(r.expect(str)){
                 auto n=new_AstToken();
                 n->str=str;
                 n->kind=kind;
                 n->left=tok;
-                tok=n;
+                tok=std::move(n);
                 if(!func(tok->right)){
                     return error(err);
                 }
@@ -493,14 +521,14 @@ namespace ast{
         }
 
         template<class Func,class Not>
-        inline bool NEqBin(AstKind kind,const char* str,const char* err,Func func,Not no,AstToken*& tok){
+        inline bool NEqBin(AstKind kind,const char* str,const char* err,Func func,Not no,SAstToken& tok){
             assert(tok);
             if(r.expect(str,no)){
                 auto n=new_AstToken();
                 n->str=str;
                 n->kind=kind;
                 n->left=tok;
-                tok=n;
+                tok=std::move(n);
                 if(!func(tok->right)){
                     return error(err);
                 }
@@ -512,21 +540,21 @@ namespace ast{
         static bool not_eq_s(char c){
             return c=='=';
         }
-#define MEMBER_CAPTURE(f) [this](AstToken*& tok){return f(tok);}
+#define MEMBER_CAPTURE(f) [this](SAstToken& tok){return f(tok);}
 
-        bool Mul(AstToken*& tok){
+        bool Mul(SAstToken& tok){
             return NEqBin(AstKind::op_mul,"*","mul",MEMBER_CAPTURE(Unary),not_eq_s,tok);
         }
 
-        bool Div(AstToken*& tok){
+        bool Div(SAstToken& tok){
             return NEqBin(AstKind::op_div,"/","div",MEMBER_CAPTURE(Unary),not_eq_s,tok);
         }
 
-        bool Mod(AstToken*& tok){
+        bool Mod(SAstToken& tok){
             return NEqBin(AstKind::op_mod,"%","mod",MEMBER_CAPTURE(Unary),not_eq_s,tok);
         }
 
-        bool Bin_Mul(AstToken*& tok){
+        bool Bin_Mul(SAstToken& tok){
             if(Unary(tok)){
                 while(Mul(tok)||Div(tok)||Mod(tok));
                 return true;
@@ -534,35 +562,35 @@ namespace ast{
             return false;
         }
 
-        bool Add(AstToken*& tok){
+        bool Add(SAstToken& tok){
             return NEqBin(AstKind::op_add,"+","add",MEMBER_CAPTURE(Bin_Mul),not_eq_s,tok);
         }
 
-        bool Sub(AstToken*& tok){
+        bool Sub(SAstToken& tok){
             return NEqBin(AstKind::op_sub,"-","sub",MEMBER_CAPTURE(Bin_Mul),not_eq_s,tok);
         }
 
-        bool ShiftLeft(AstToken*& tok){
+        bool ShiftLeft(SAstToken& tok){
             return NEqBin(AstKind::op_shl,"<<","shift left",MEMBER_CAPTURE(Bin_Mul),not_eq_s,tok);
         }
 
-        bool ShiftRight(AstToken*& tok){
+        bool ShiftRight(SAstToken& tok){
             return NEqBin(AstKind::op_shr,">>","shift right",MEMBER_CAPTURE(Bin_Mul),not_eq_s,tok);
         }
 
-        bool BitOr(AstToken*& tok){
+        bool BitOr(SAstToken& tok){
             return NEqBin(AstKind::op_bitor,"|","bit or",MEMBER_CAPTURE(Bin_Mul),[](char c){return c=='='||c=='|';},tok);
         }
 
-        bool BitAnd(AstToken*& tok){
+        bool BitAnd(SAstToken& tok){
             return NEqBin(AstKind::op_bitand,"&","bit and",MEMBER_CAPTURE(Bin_Mul),[](char c){return c=='='||c=='&';},tok);
         }
 
-        bool BitXor(AstToken*& tok){
+        bool BitXor(SAstToken& tok){
             return NEqBin(AstKind::op_bitxor,"^","bit xor",MEMBER_CAPTURE(Bin_Mul),not_eq_s,tok);
         }
 
-        bool Bin_Add(AstToken*& tok){
+        bool Bin_Add(SAstToken& tok){
             if(Bin_Mul(tok)){
                 while(Add(tok)||Sub(tok)||ShiftLeft(tok)||ShiftRight(tok)||BitOr(tok)||
                       BitAnd(tok)||BitXor(tok));
@@ -571,31 +599,31 @@ namespace ast{
             return false;
         }
 
-        bool Equal(AstToken*& tok){
+        bool Equal(SAstToken& tok){
             return Bin(AstKind::op_equ,"==","equal",MEMBER_CAPTURE(Bin_Add),tok);
         }
 
-        bool NotEqual(AstToken*& tok){
+        bool NotEqual(SAstToken& tok){
             return Bin(AstKind::op_neq,"!=","not equal",MEMBER_CAPTURE(Bin_Add),tok);
         }
 
-        bool LeftGreaterRight(AstToken*& tok){
+        bool LeftGreaterRight(SAstToken& tok){
             return Bin(AstKind::op_lgr,">","left greater right",MEMBER_CAPTURE(Bin_Add),tok);
         }
 
-        bool LeftLesserRight(AstToken*& tok){
+        bool LeftLesserRight(SAstToken& tok){
             return Bin(AstKind::op_llr,"<","left lesser right",MEMBER_CAPTURE(Bin_Add),tok);
         }
 
-        bool LeftEqualLesserRight(AstToken*& tok){
+        bool LeftEqualLesserRight(SAstToken& tok){
             return Bin(AstKind::op_lelr,"<=","left equal lesser right",MEMBER_CAPTURE(Bin_Add),tok);
         }
 
-        bool LeftEqualGreaterRight(AstToken*& tok){
+        bool LeftEqualGreaterRight(SAstToken& tok){
             return Bin(AstKind::op_legr,">=","left equal greater right",MEMBER_CAPTURE(Bin_Add),tok);
         }
 
-        bool Bin_Compare(AstToken*& tok){
+        bool Bin_Compare(SAstToken& tok){
             if(Bin_Add(tok)){
                 while(Equal(tok)||NotEqual(tok)||LeftEqualGreaterRight(tok)||LeftEqualLesserRight(tok)||
                       LeftGreaterRight(tok)||LeftLesserRight(tok));
@@ -604,7 +632,7 @@ namespace ast{
             return false;
         }
 
-        bool Bin_LogicalAnd(AstToken*& tok){
+        bool Bin_LogicalAnd(SAstToken& tok){
             if(Bin_Compare(tok)){
                 while(Bin(AstKind::op_logicaland,"&&","logical and",MEMBER_CAPTURE(Bin_Compare),tok));
                 return true;
@@ -612,7 +640,7 @@ namespace ast{
             return false;
         }
 
-        bool Bin_LogicalOr(AstToken*& tok){
+        bool Bin_LogicalOr(SAstToken& tok){
             if(Bin_LogicalAnd(tok)){
                 while(Bin(AstKind::op_logicalor,"||","logical or",MEMBER_CAPTURE(Bin_LogicalAnd),tok));
                 return true;
@@ -620,51 +648,51 @@ namespace ast{
             return false;
         }
 
-        bool Assign(AstToken*& tok){
+        bool Assign(SAstToken& tok){
             return Bin(AstKind::op_assign,"=","assign",MEMBER_CAPTURE(Bin_Assign),tok);
         }
 
-        bool AddAssign(AstToken*& tok){
+        bool AddAssign(SAstToken& tok){
             return Bin(AstKind::op_add_eq,"+=","add assign",MEMBER_CAPTURE(Bin_Assign),tok);
         }
 
-        bool SubAssign(AstToken*& tok){
+        bool SubAssign(SAstToken& tok){
             return Bin(AstKind::op_sub_eq,"-=","sub assign",MEMBER_CAPTURE(Bin_Assign),tok);
         }
 
-        bool MulAssign(AstToken*& tok){
+        bool MulAssign(SAstToken& tok){
             return Bin(AstKind::op_mul_eq,"*=","mul assign",MEMBER_CAPTURE(Bin_Assign),tok);
         }
 
-        bool DivAssign(AstToken*& tok){
+        bool DivAssign(SAstToken& tok){
             return Bin(AstKind::op_div_eq,"/=","div assign",MEMBER_CAPTURE(Bin_Assign),tok);
         }
 
-        bool ModAssign(AstToken*& tok){
+        bool ModAssign(SAstToken& tok){
             return Bin(AstKind::op_mod_eq,"%=","mod assign",MEMBER_CAPTURE(Bin_Assign),tok);
         }
 
-        bool ShiftLeftAssign(AstToken*& tok){
+        bool ShiftLeftAssign(SAstToken& tok){
             return Bin(AstKind::op_shl_eq,"<<=","shift left assign",MEMBER_CAPTURE(Bin_Assign),tok);
         }
 
-        bool ShiftRightAssign(AstToken*& tok){
+        bool ShiftRightAssign(SAstToken& tok){
             return Bin(AstKind::op_shr_eq,">>=","shift right assign",MEMBER_CAPTURE(Bin_Assign),tok);
         }
 
-        bool BitOrAssign(AstToken*& tok){
+        bool BitOrAssign(SAstToken& tok){
             return Bin(AstKind::op_bitor_eq,"|=","bit or assign",MEMBER_CAPTURE(Bin_Assign),tok);
         }
 
-        bool BitAndAssign(AstToken*& tok){
+        bool BitAndAssign(SAstToken& tok){
             return Bin(AstKind::op_bitand_eq,"&=","bit and assign",MEMBER_CAPTURE(Bin_Assign),tok);
         }
 
-        bool BitXorAssign(AstToken*& tok){
+        bool BitXorAssign(SAstToken& tok){
             return Bin(AstKind::op_bitxor_eq,"|=","bit xor assign",MEMBER_CAPTURE(Bin_Assign),tok);
         }
 
-        bool Bin_Assign(AstToken*& tok){
+        bool Bin_Assign(SAstToken& tok){
             if(Bin_LogicalOr(tok)){
                 while(Assign(tok)||AddAssign(tok)||SubAssign(tok)||MulAssign(tok)||DivAssign(tok)||ModAssign(tok)||
                       ShiftRightAssign(tok)||ShiftLeftAssign(tok)||BitOrAssign(tok)||BitAndAssign(tok)||BitXorAssign(tok));
@@ -673,7 +701,7 @@ namespace ast{
             return false;
         }
 
-        bool Cond(AstToken*& tok){
+        bool Cond(SAstToken& tok){
             if(Bin_Assign(tok)){
                 assert(tok);
                 if(r.expect("?")){
@@ -696,7 +724,7 @@ namespace ast{
             return false;
         }
 
-        bool Init(AstToken*& tok){
+        bool Init(SAstToken& tok){
             if(Cond(tok)){
                 Bin(AstKind::op_init,":=","init",MEMBER_CAPTURE(Cond),tok);
                 return true;
@@ -704,11 +732,11 @@ namespace ast{
             return false;
         }
 
-        bool Expr(AstToken*& tok){
+        bool Expr(SAstToken& tok){
             return Cond(tok);
         }
 
-        bool ExprStmt(AstToken*& tok){
+        bool ExprStmt(SAstToken& tok){
             if(Init(tok)){
                 if(!r.expect(";")){
                     return error("expr statement:expected ; but not");
@@ -718,7 +746,7 @@ namespace ast{
             return false;
         }
 
-        bool IfStmt(AstToken*& tok){
+        bool IfStmt(SAstToken& tok){
             if(r.expect("if",PROJECT_NAME::is_c_id_usable)){
                 tok=new_AstToken();
                 tok->kind=AstKind::if_stmt;
@@ -729,7 +757,10 @@ namespace ast{
                     Expr(tok->cond);
                 }
                 if(r.expect("{")){
+                    tok->scope=pool.unnamed_scope("if ");
                     Block(tok->block);
+                    auto f=pool.leavescope();
+                    assert(f);
                 }
                 else if(!r.expect(";")){
                     return error("if statement:expected ; or { but not");
@@ -752,27 +783,30 @@ namespace ast{
             return false;
         }
 
-        bool ForStmt(AstToken*& tok){
+        bool ForStmt(SAstToken& tok){
             if(r.expect("for",PROJECT_NAME::is_c_id_usable)){
+                auto finally=[&tok,this]{
+                    tok->scope=pool.unnamed_scope("for ");
+                    Block(tok->block);
+                    auto f=pool.leavescope();
+                    assert(f);
+                    return true;
+                };
                 tok=new_AstToken();
                 tok->kind=AstKind::for_stmt;
                 if(r.expect("{")){
-                    Block(tok->block);
-                    return true;
+                    return finally();
                 }
                 Init(tok->cond);
                 if(r.expect("{")){
-                    Block(tok->block);
-                    return true;
+                    return finally();
                 }
                 else if(!r.expect(";")){
                     return error("for statement:expected ; or { but not");
                 }
                 tok->left=tok->cond;
                 tok->cond=nullptr;
-                if(r.expect(";")){
-
-                }
+                if(r.expect(";")){}
                 else{
                     Expr(tok->cond);
                     if(!r.expect(";")){
@@ -780,15 +814,13 @@ namespace ast{
                     }
                 }
                 if(r.expect("{")){
-                    Block(tok->block);
-                    return true;
+                    return finally();
                 }
                 Expr(tok->right);
                 if(!r.expect("{")){
                     return error("for statement:expected { but not");
                 }
-                Block(tok->block);
-                return true;
+                return finally();
             }
             return false;
         }
@@ -798,31 +830,141 @@ namespace ast{
                 if(r.eof()){
                     return error("block:unexpected EOF");
                 }
-                AstToken* stmt=nullptr;
+                SAstToken stmt=nullptr;
                 Stmt(stmt);
-                tok.push_back(stmt);
+                tok.push_back(std::move(stmt));
             }
             return true;
         }
 
-        bool BlockStmt(AstToken*& tok){
+        bool GlobalBlock(AstList<AstToken>& tok){
+            while(!r.expect("}")){
+                if(r.eof()){
+                    return error("block:unexpected EOF");
+                }
+                SAstToken stmt=nullptr;
+                GlobalStmt(stmt);
+                tok.push_back(std::move(stmt));
+            }
+            return true;
+        }
+
+        bool BlockStmt(SAstToken& tok){
             if(r.expect("{")){
                 tok=new_AstToken();
                 tok->kind=AstKind::block_stmt;
+                tok->scope=pool.unnamed_scope("block ");
                 Block(tok->block);
+                auto f=pool.leavescope();
+                assert(f);
                 return true;
             }
             return false;
         }
 
-        bool VarStmt(AstToken*& tok){
+        bool CaseBlock(AstList<AstToken>& tok){
+            SAstToken current=nullptr;
+            while(!r.expect("}")){
+                if(r.eof()){
+                    return error("case block:unexpected EOF");
+                }
+                if(r.expect("case",PROJECT_NAME::is_c_id_usable)){
+                    current=new_AstToken();
+                    current->kind=AstKind::case_stmt;
+                    Expr(current->cond);
+                    if(!r.expect(":"))return error("case block:expected : but not");
+                    tok.push_back(current);
+                }
+                else if(r.expect("default",PROJECT_NAME::is_c_id_usable)){
+                    current=new_AstToken();
+                    current->kind=AstKind::default_stmt;
+                    if(!r.expect(":"))return error("case block:expected : but not");
+                    tok.push_back(current);
+                }
+                else{
+                    if(!current){
+                        current=new_AstToken();
+                        current->str="init";
+                        current->kind=AstKind::sw_init_stmt;
+                        tok.push_back(current);
+                    }
+                    SAstToken tmp=nullptr;
+                    Stmt(tmp);
+                    current->block.push_back(std::move(tmp));
+                }
+            }
+            return true;
+        }
+
+        bool SwitchStmt(SAstToken& tok){
+            if(r.expect("switch",PROJECT_NAME::is_c_id_usable)){
+                tok=new_AstToken();
+                tok->kind=AstKind::switch_stmt;
+                tok->str="switch";
+                Expr(tok->cond);
+                if(!r.expect("{"))return error("switch:expected { but not");
+                CaseBlock(tok->block);
+                return true;
+            }
+            return false;
+        }
+        
+
+        bool VarStmt(SAstToken& tok){
             if(r.expect("var",PROJECT_NAME::is_c_id_usable)){
-                
+                bool bracketf=false;
+                if(r.expect("(")){
+                    bracketf=true;
+                }
+                tok=new_AstToken();
+                tok->kind=AstKind::var_stmt;
+                tok->str="var";
+                do{
+                    AstList<AstToken> list;
+                    size_t count=0;
+                    SAstToken tmp=nullptr;
+                    bool first=true;
+                    do{
+                        if(!Identifier(tmp))return error("var:expected identifier but not");
+                        if(first){
+                            tmp->kind=AstKind::init_border;
+                        }
+                        else{
+                            tmp->kind=AstKind::init_var;
+                        }
+                        list.push_back(std::move(tmp));
+                        count++;
+                    }while(!r.expect(","));
+                    if(!r.ahead("=")){
+                        ast::type::SType type=nullptr;
+                        tr.read_type(type);
+                        foreach_node(p,list){
+                            p->type=type;
+                        }
+                    }
+                    if(r.expect("=")){
+                        first=true;
+                        foreach_node(p,list){
+                            if(!first&&!r.expect(",")){
+                                return error("var:expected , but not");
+                            }
+                            Expr(p->right);
+                            if(first){
+                                if(!r.ahead(",")){
+                                    break;
+                                }
+                                first=false;
+                            }
+                        }
+                    }
+                    tok->block.push_back(std::move(list.node));
+                }while(bracketf&&!r.expect(")"));
+                return true;
             }
             return false;
         }
 
-        bool FuncStmt(AstToken*& tok){
+        bool FuncStmt(SAstToken& tok){
             if(Func(tok)){
                 if(After(tok)){
                     if(!r.expect(";")){
@@ -837,7 +979,7 @@ namespace ast{
             return false;
         }
 
-        bool DeclStmt(AstToken*& tok){
+        bool DeclStmt(SAstToken& tok){
             if(r.expect("decl",PROJECT_NAME::is_c_id_usable)){
                 if(!PROJECT_NAME::is_c_id_top_usable(r.achar())){
                     return error("decl statement:expected identifier but not");
@@ -846,7 +988,7 @@ namespace ast{
                 tok->kind=AstKind::decl_stmt;
                 IdRead(tok->str);
                 tr.func_read(tok->type,false);
-                if(r.expect(";")){
+                if(!r.expect(";")){
                     return error("decl statement:expected ; but not");
                 }
                 return true;
@@ -854,7 +996,7 @@ namespace ast{
             return false;
         }
 
-        bool ReturnStmt(AstToken*& tok){
+        bool ReturnStmt(SAstToken& tok){
             if(r.expect("return",PROJECT_NAME::is_c_id_usable)){
                 tok=new_AstToken();
                 tok->kind=AstKind::return_stmt;
@@ -868,21 +1010,79 @@ namespace ast{
             return false;
         }
 
-        bool Stmt(AstToken*& tok){
-            return IfStmt(tok)||ForStmt(tok)||ReturnStmt(tok)||BlockStmt(tok)||FuncStmt(tok)||
-            DeclStmt(tok)||ExprStmt(tok)||r.expect(";")||error("statement:not match for any statement");
+        bool NameSpaceStmt(SAstToken& tok){
+            if(r.expect("namespace",PROJECT_NAME::is_c_id_usable)){
+                size_t i=0;
+                tok=new_AstToken();
+                tok->kind=AstKind::namespace_stmt;
+                while(true){
+                    if(!PROJECT_NAME::is_c_id_top_usable(r.achar())){
+                        return error("namespace:expected identifier but not");
+                    }
+                    std::string name;
+                    IdRead(name);
+                    i++;
+                    if(!pool.enterscope(name)){
+                        pool.makescope(name);
+                        auto f=pool.enterscope(name);
+                        assert(f);
+                    }
+                    tok->str+=name;
+                    if(r.expect("::"))continue;
+                    break;
+                }
+                if(!r.expect("{")){
+                    return error("namespace:expected { but not");
+                }
+                GlobalBlock(tok->block);
+                while(i){
+                    auto g=pool.leavescope();
+                    assert(g);
+                    i--;
+                }
+                return true;
+            }
+            return false;
+        }
+
+        bool TypeStmt(SAstToken& tok){
+            if(r.expect("type",PROJECT_NAME::is_c_id_usable)){
+                tok=new_AstToken();
+                tok->kind=AstKind::type_stmt;     
+                if(!PROJECT_NAME::is_c_id_top_usable(r.achar())){
+                    return error("type statement:expected identifier but not");
+                }
+                IdRead(tok->str);
+                tok->type=pool.alias(tok->str.c_str());
+                pool.register_type(tok->str,tok->type);
+                tr.read_type(tok->type->base);
+                if(!r.expect(";")){
+                    return error("type statement:expected ; but not");
+                }
+                return true;
+            }
+            return false;
+        }
+
+        bool Stmt(SAstToken& tok){
+            return TypeStmt(tok)||IfStmt(tok)||ForStmt(tok)||ReturnStmt(tok)||SwitchStmt(tok)||BlockStmt(tok)||FuncStmt(tok)||
+            VarStmt(tok)||DeclStmt(tok)||r.expect(";")||ExprStmt(tok)||error("statement:not match for any statement");
+        }
+
+        bool GlobalStmt(SAstToken& tok){
+            return NameSpaceStmt(tok)||Stmt(tok);
         }
 
         bool Stmts(AstList<AstToken>& tok){
             while(!r.eof()){
-                AstToken* stmt=nullptr;
-                Stmt(stmt);
-                tok.push_back(stmt);
+                SAstToken stmt=nullptr;
+                GlobalStmt(stmt);
+                tok.push_back(std::move(stmt));
             }
             return true;
         }
 
-        bool Program(AstToken*& tok){
+        bool Program(SAstToken& tok){
             tok=new_AstToken();
             tok->kind=AstKind::program;
             Stmts(tok->block);
@@ -906,14 +1106,14 @@ namespace ast{
             return &r==p?IdRead(str):false;
         }
 
-        bool parse(AstToken*& tok,const char** err=nullptr){
+        bool parse(SAstToken& tok,const char** err=nullptr){
             r.set_ignore(PROJECT_NAME::ignore_c_comments);
             bool ret=true;
             auto tmpdel=[this]{
-                for(auto p:temp){
+                /*for(auto p:temp){
                     delete_(p);
                 }
-                pool.delall();
+                pool.delall();*/
             };
             try{
                 Program(tok);
@@ -932,12 +1132,23 @@ namespace ast{
                 tmpdel();
                 ret=false;
             }
-            temp.resize(0);
+            //temp.resize(0);
             return ret;
         }
 
-        bool expr(AstToken*& tok){
-            return Expr(tok);
+        bool linepos(PROJECT_NAME::LinePosContext& ctx){
+            r.readwhile(PROJECT_NAME::linepos,ctx);
+            return true;
+        }
+
+        bool exprp(PROJECT_NAME::Reader<Buf>* p,SAstToken& tok){
+            if(p!=&r)return error("");
+            //auto b=temp.size();
+            Expr(tok);
+            /*if(b<temp.size()){
+                temp.erase(temp.begin()+b,temp.begin()+temp.size());
+            }*/
+            return true;
         } 
     };
 #undef MEMBER_CAPTURE

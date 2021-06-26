@@ -9,7 +9,7 @@
 #include<basic_helper.h>
 namespace ast{
     namespace type{
-#define MEMBER_CAPTURE(f) [this](auto... in)->ast::type::Type*{return f(in...);}
+#define MEMBER_CAPTURE(f) [this](auto... in)->ast::type::SType{return f(in...);}
         template<class SyntaxReader,class Buf>
         struct TypeAstReader{
         private:
@@ -18,7 +18,7 @@ namespace ast{
             TypePool& pool;
 
 
-            Object* new_Object(){
+            SObject new_Object(){
                 return pool.new_Object();
             }
 
@@ -31,8 +31,12 @@ namespace ast{
                 return s.idreadp(&r,in);
             }
 
+            bool expr(SAstToken& tok){
+                return s.exprp(&r,tok);
+            }
+
             template<class Func,class... Args>
-            inline bool TypeGet(Type*& t,Func f,const char* err,Args... args){
+            inline bool TypeGet(SType& t,Func f,const char* err,Args... args){
                 if(r.ahead(",")||r.ahead(")")){
                     t=pool.generic();
                 }
@@ -43,21 +47,21 @@ namespace ast{
                 return true;
             }
 
-            bool Pointer(Type*& t){
+            bool Pointer(SType& t){
                 if(r.expect("*")){
                     return TypeGet(t,MEMBER_CAPTURE(pool.pointer_to),"pointer");
                 }
                 return false;
             }
 
-            bool Reference(Type*& t){
+            bool Reference(SType& t){
                 if(r.expect("&")){
                     return TypeGet(t,MEMBER_CAPTURE(pool.reference_to),"reference");
                 }
                 return false;
             }
 
-            bool Temporary(Type*& t){
+            bool Temporary(SType& t){
                 if(r.expect("&&")){
                     return TypeGet(t,MEMBER_CAPTURE(pool.temporary_of),"temporary");
                 }
@@ -65,13 +69,13 @@ namespace ast{
             }
 
 
-            bool Array(Type*& t){
+            bool Array(SType& t){
                 if(r.expect("[")){
                     if(r.expect("]")){
                         return TypeGet(t,MEMBER_CAPTURE(pool.vector_of),"vector");
                     }
-                    AstToken* tok;
-                    s.expr(tok);
+                    SAstToken tok;
+                    expr(tok);
                     if(!r.expect("]")){
                         return error("array:expected ] but not");
                     }
@@ -83,7 +87,7 @@ namespace ast{
             bool ParseParameter(AstList<Object>& params,bool generic,bool& genty){
                 if(!r.expect(")")){
                     while(true){
-                        Object* param=new_Object();
+                        SObject param=new_Object();
                         if(PROJECT_NAME::is_c_id_top_usable(r.achar())){
                             do{
                                 auto bpos=r.readpos();
@@ -114,9 +118,9 @@ namespace ast{
                             genty=true;
                         }
                         if(r.expect("=")){
-                            s.expr(param->init);
+                            expr(param->init);
                         }
-                        params.push_back(param);
+                        params.push_back(std::move(param));
                         if(r.expect(","))continue;
                         if(!r.expect(")")){
                             return error("param:expected ) or , but not");
@@ -127,7 +131,7 @@ namespace ast{
                 return true;
             }
 
-            bool FuncParse(Type*& t,bool gen){
+            bool FuncParse(SType& t,bool gen){
                 if(!r.expect("(")){
                     return error("function:expected ( but not");
                 }
@@ -144,7 +148,7 @@ namespace ast{
                 return true;
             }
 
-            bool Function(Type*& t){
+            bool Function(SType& t){
                 if(r.expect("func",PROJECT_NAME::is_c_id_usable)){
                     FuncParse(t,true);
                     return true;
@@ -154,7 +158,7 @@ namespace ast{
 
             bool ParseStructs(AstList<Object>& params){
                 while(!r.expect("}")){
-                    Object* param=new_Object();
+                    SObject param=new_Object();
                     if(r.expect("_",PROJECT_NAME::is_c_id_usable)){}
                     else if(PROJECT_NAME::is_c_id_top_usable(r.achar())){
                         idread(param->name);    
@@ -164,22 +168,23 @@ namespace ast{
                     }
                     read_type(param->type);
                     if(r.expect("=")){
-                        s.expr(param->init);
+                        expr(param->init);
                     }
                     /*if(!r.expect(";")){
                         return error("struct:expected ; but not");
                     }*/
+                    params.push_back(std::move(param));
                 }
                 return true;
             }
 
-            bool StructParse(Type*& t){
+            bool StructParse(SType& t){
                 t=pool.struct_();
                 ParseStructs(t->param);
                 return true;
             }
 
-            bool Struct(Type*& t){
+            bool Struct(SType& t){
                 if(r.expect("struct",PROJECT_NAME::is_c_id_usable)){
                     if(!r.expect("{")){
                         return error("struct:expected { but not");
@@ -189,7 +194,7 @@ namespace ast{
                 return false;
             }
 
-            bool KeyWord(Type*& t){
+            bool KeyWord(SType& t){
                 const char* expected=nullptr;
                 auto e=[&,this](auto c){return r.expectp(c,expected,PROJECT_NAME::is_c_id_usable);};
                 if(e("float")||e("double")||e("int")||e("uint")||e("bool")||
@@ -202,28 +207,47 @@ namespace ast{
                 else if(e("const")){
                     return TypeGet(t,MEMBER_CAPTURE(pool.const_of),"const");
                 }
+                else if(e("typeof")){
+                    t=pool.typeofexpr();
+                    if(!r.expect("(")){
+                        return error("typeof:expected ( but not");
+                    }
+                    expr(t->token);
+                    if(!r.expect(")")){
+                        return error("typeof:expected ) but not");
+                    }
+                    return true;
+                }
                 return false;
             }
 
-            bool Identifier(Type*& t){
-                std::string id;
+            bool Identifier(SType& t){
+                Scope* search=nullptr;
                 auto idf=[&,this]{
+                    std::string id;
                     while(true){
                         idread(id);
                         if(r.expect("::")){
-                            id+="::";
                             if(!PROJECT_NAME::is_c_id_top_usable(r.achar())){
                                 return error("type:identifier:expected identifier but not");
                             }
+                            search=pool.get_scope(search,id.c_str());
+                            if(!search){
+                                return error("type:identifier:undecleared namespace");
+                            }
+                            id="";
                             continue;
                         }
                         break;
                     }
-                    t=pool.identifier(id.c_str());
+                    if(!search){
+                        search=pool.get_scope(nullptr,nullptr);
+                    }
+                    t=pool.identifier(search,id.c_str());
                     return true;
                 };
                 if(r.expect("::")){
-                    id+="::";
+                    search=pool.get_scope(nullptr,"::");
                     return idf();
                 }
                 else if(PROJECT_NAME::is_c_id_top_usable(r.achar())){
@@ -232,16 +256,16 @@ namespace ast{
                 return false;
             }
 
-            bool Type(Type*& t){
+            bool Type(SType& t){
                 return Pointer(t)||Array(t)||Function(t)||Struct(t)||KeyWord(t)||Identifier(t);
             }
 
         public:
-            bool read_type(ast::type::Type*& t){
+            bool read_type(ast::type::SType& t){
                 return Temporary(t)||Reference(t)||Type(t);
             }
 
-            bool func_read(ast::type::Type*& t,bool gen){
+            bool func_read(ast::type::SType& t,bool gen){
                 return FuncParse(t,gen);
             }
             TypeAstReader(SyntaxReader& sr,PROJECT_NAME::Reader<Buf>& rr,TypePool& ip):s(sr),r(rr),pool(ip){}

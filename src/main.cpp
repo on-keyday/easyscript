@@ -16,6 +16,9 @@
 #include<fileio.h>
 #include<charconv>
 #include<json_util.h>
+#include<refactering/reader.hpp>
+#include"bunkai/eval.h"
+
 
 using namespace PROJECT_NAME;
 using strreader=Reader<std::string>;
@@ -72,17 +75,7 @@ int WaitProxy(void* ctx,const char* membname,ArgContext* arg){
     return 0;
 }
 
-void test1(){
-    ast::type::TypePool pool;
-    ast::AstReader r(FileMap(R"(../../../src/bunkai_src/define_asm.asd)"),pool);
-    ast::AstToken* tok=nullptr;
-    const char* err=nullptr;
-    if(r.parse(tok,&err)){
-        ast::delete_token(tok);
-        pool.delall();
-    }
-    std::wcout<<r.bufctrl().c_str();
-    ast::check_assert();
+void test2(){
     JSON js;
     Reader<FileMap> num(R"()");
     std::cout << num.ref().size() << "\n";
@@ -97,6 +90,94 @@ void test1(){
     std::cout << std::chrono::duration_cast<std::chrono::milliseconds>(end-start).count() << "\n";
     std::cout << std::chrono::duration_cast<std::chrono::milliseconds>(fin-begin).count() << "\n";
 }
+void ownermap(JSON& js,ast::SAstToken& tok);
+void ownermap(JSON& js,ast::type::SObject& tok);
+
+void ownermap(JSON& js,ast::type::SType& tok,bool nobase=true){
+    if(tok->name!="")js["name"]=tok->name;
+    js["user"]=tok.use_count();
+    js["pointer"]=(uintptr_t)tok.get();
+    if(tok->token){
+        ownermap(js["token"],tok->token);
+    }
+    foreach_node(p,tok->param){
+        JSON tmp;
+        ownermap(tmp,p);
+        js["param"].push_back(std::move(tmp));
+    }
+    if(tok->vecof){
+        ownermap(js["vecof"],tok->vecof);
+    }
+    if(tok->ptrto){
+        ownermap(js["ptrto"],tok->ptrto);
+    }
+    if(tok->refof){
+        ownermap(js["refof"],tok->refof);
+    }
+    if(tok->tmpof){
+        ownermap(js["tmpof"],tok->tmpof);
+    }
+    if(!nobase&&tok->base){
+        ownermap(js["base"],tok->base,false);
+    }
+}
+
+void ownermap(JSON& js,ast::type::SObject& tok){
+    js["user"]=tok.use_count();
+    js["pointer"]=(uintptr_t)tok.get();
+    if(tok->init){
+        ownermap(js["token"],tok->init);
+    }
+    if(tok->type){
+        ownermap(js["type"],tok->type);
+    }
+}
+
+
+void ownermap(JSON& js,ast::SAstToken& tok){
+    js["user"]=tok.use_count();
+    js["pointer"]=(uintptr_t)tok.get();
+    if(tok->left)ownermap(js["left"],tok->left);
+    if(tok->right)ownermap(js["right"],tok->right);
+    if(tok->cond)ownermap(js["cond"],tok->cond);
+    if(tok->block.node){
+        size_t c=0;
+        auto& ref=js["block"];
+        foreach_node(p,tok->block){
+            JSON tmp;
+            ownermap(tmp,p);
+            ref.push_back(std::move(tmp));
+            c++;
+        }
+    }
+    if(tok->type){
+        ownermap(js["type"],tok->type,false);
+    }
+}
+
+auto test1(){
+    ast::type::TypePool pool;
+    ast::AstReader r(FileMap(R"(../../../src/bunkai_src/define_asm.asd)"),pool);
+    ast::SAstToken tok=nullptr;
+    const char* err=nullptr;
+    LinePosContext ctx;
+    auto start=std::chrono::system_clock::now();
+    auto f=r.parse(tok,&err);
+    auto end=std::chrono::system_clock::now();
+    r.linepos(ctx);
+    if(f){
+        /*ast::delete_token(tok);
+        pool.delall();*/
+    }
+    //std::wcout<<r.bufctrl().c_str();
+    //eval::Evaluator p(pool);
+    JSON js;
+    ownermap(js,tok);
+    std::ofstream("ownermap.json") << js.to_string(4);
+    return js;
+}
+
+
 
 int main(int argc,char** argv){
     auto script=make_script();
@@ -112,9 +193,5 @@ int main(int argc,char** argv){
     delete_script(script);
     //hardtest();
     //auto ret=netclient_argv(argc,argv);
-    Reader<std::string> s("090005437.e+9");
-    std::string res;
-    NumberContext<char> ctx;
-    s.readwhile(res,number,&ctx);
     return 0;
 }

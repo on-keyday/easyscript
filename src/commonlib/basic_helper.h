@@ -35,12 +35,29 @@ namespace PROJECT_NAME{
         Refer(Buf& in):buf(in){}
     };
 
+
+    template<class T>
+    struct Ref {
+    private:
+        T& t;
+    public:
+        T* operator->() {
+            return std::addressof(t);
+        }
+        T& operator*() {
+            return t;
+        }
+        Ref(const Ref& in):t(in.t){}
+        Ref(Ref&& in)noexcept :t(in.t) {}
+        Ref(T& in):t(in) {}
+    };
+
     template<class Char>
     struct NumberContext{
         Char dotsymbol=(Char)'.';
-        bool strict=false;
+        bool strict_hex=false;
         bool must_sandwichdot=false;
-        
+        bool top_no_zero=false;
 
         int radix=0;
         bool floatf=false;
@@ -85,6 +102,11 @@ namespace PROJECT_NAME{
     bool is_alphabet(Char c){
         return c>=(Char)'a'&&c<=(Char)'z'||
                c>=(Char)'A'&&c<=(Char)'Z';
+    }
+
+    template<class Char>
+    bool is_string_symbol(Char c){
+        return c==(Char)'\"'||c==(Char)'\''||c==(Char)'`';
     }
 
     template<class Char>
@@ -289,7 +311,7 @@ namespace PROJECT_NAME{
         if(begin)return true;
         if(!self)return true;
         auto c=self->achar();
-        if(c=='\"'||c=='\''||c=='`'){
+        if(is_string_symbol(c)){
             if(!self->string(ret)){
                 *res=0;
             }
@@ -309,6 +331,41 @@ namespace PROJECT_NAME{
         }
         return true;
     }
+
+    template<class T>
+    bool defcmdlineproc(T& p){
+        if(is_string_symbol(p[0])){
+            p.pop_back();
+            p.erase(0,1);
+        }
+        return true;
+    }
+
+    template<class Buf>
+    bool get_cmdline(Reader<Buf>& , int mincount, bool) {
+        return mincount == 0;
+    }
+
+    template<class Buf,class Now,class... Args>
+    bool get_cmdline(Reader<Buf>& r,int mincount,bool fit,Now& now,Args&... arg){
+        int i=0;
+        r.readwhile(now,cmdline_read,&i);
+        if(i==0){
+            return mincount==0;
+        }
+        r.ahead("'");
+        if(fit&&mincount==0){
+            return true;
+        }
+        return get_cmdline(r,mincount==0?0:mincount-1,fit,arg...);
+    }
+
+    template<class Func,class...Args>
+    bool proc_cmdline(Func proc,Args&... args) {
+        [](auto...){}(proc(args)...);
+        return true;
+    }
+
     inline namespace old{
     template<class Buf,class Ret,class Char>
         bool number_old(Reader<Buf>* self,Ret& ret,NumberContext<Char>*& ctx,bool begin){
@@ -414,7 +471,7 @@ namespace PROJECT_NAME{
         if(!ctx)return !begin;
         if(!self){
             if(ctx->mustfloat&&!ctx->floatf)ctx->failed=true;
-            if(ctx->strict&&ctx->radix==16&&!ctx->expf)ctx->failed=true;
+            if(ctx->strict_hex&&ctx->radix==16&&!ctx->expf)ctx->failed=true;
             return true;
         }
         auto n=self->achar();
@@ -435,13 +492,14 @@ namespace PROJECT_NAME{
         }
         bool must=false;
         if(ctx->radix==0){
-            if(self->expect("0x")){
+            if(self->expect("0x")||self->expect("0X")){
                 ctx->radix=16;
                 ctx->judgenum=is_hex;
                 ret.push_back((Char)'0');
-                ret.push_back((Char)'x');
-                if(self->achar()==ctx->dotsymbol){
-                    if(!ctx->must_sandwichdot){
+                ret.push_back((Char)self->offset(-1));
+                n = self->achar();
+                if(n==ctx->dotsymbol){
+                    if(ctx->must_sandwichdot){
                         ctx->failed=true;
                         return true;
                     }
@@ -449,25 +507,32 @@ namespace PROJECT_NAME{
                     ctx->floatf=true;
                 }
             }
-            else if(self->expect("0b")){
+            else if(self->expect("0b")||self->expect("0B")){
                 ctx->radix=2;
                 ctx->judgenum=is_bin;
                 ret.push_back((Char)'0');
-                ret.push_back((Char)'b');
+                ret.push_back(self->offset(-1));
+                n = self->achar();
             }
             else if(self->expect("0",[](Char c){return !is_oct(c);})){
                 ctx->radix=8;
                 ctx->judgenum=is_oct;
                 ret.push_back((Char)'0');
+                n = self->achar();
             }
             else if(self->expect("0",[](Char c){return !is_digit(c);})){
+                if(ctx->top_no_zero){
+                    ctx->failed=true;
+                    return true;
+                }
                 ctx->mustfloat=true;
                 ctx->radix=10;
                 ctx->judgenum=is_digit;
                 ret.push_back((Char)'0');
+                n = self->achar();
             }
             else if(n==ctx->dotsymbol){
-                if(!ctx->must_sandwichdot){
+                if(ctx->must_sandwichdot){
                     ctx->failed=true;
                     return true;
                 }
@@ -475,6 +540,10 @@ namespace PROJECT_NAME{
                 ctx->judgenum=is_digit;
                 ctx->floatf=true;
                 increment();
+                if(!is_digit(n)){
+                    ctx->failed=true;
+                    return true;
+                }
             }
             else if(is_digit(n)){
                 ctx->radix=10;
@@ -494,6 +563,10 @@ namespace PROJECT_NAME{
             }
             ctx->floatf=true;
             if(ctx->radix==8){
+                if(ctx->top_no_zero){
+                    ctx->failed=true;
+                    return true;
+                }
                 ctx->radix=10;
             }
             increment();
@@ -519,6 +592,10 @@ namespace PROJECT_NAME{
             }
             ctx->judgenum=is_digit;
             if(ctx->radix==8){
+                if(ctx->top_no_zero){
+                    ctx->failed=true;
+                    return true;
+                }
                 ctx->radix=10;
             }
             increment();
@@ -526,13 +603,17 @@ namespace PROJECT_NAME{
         }
         if(!ctx->judgenum(n)){
             if(ctx->radix==8&&is_digit(n)){
+                 if(ctx->top_no_zero){
+                    ctx->failed=true;
+                    return true;
+                }
                 ctx->mustfloat=true;
                 ctx->judgenum=is_digit;
             }
             else{
                 if(must)ctx->failed=true;
                 if(ctx->mustfloat&&!ctx->floatf)ctx->failed=true;
-                if(ctx->strict&&ctx->radix==16&&!ctx->expf)ctx->failed=true;
+                if(ctx->strict_hex&&ctx->radix==16&&!ctx->expf)ctx->failed=true;
                 if(ctx->must_sandwichdot&&dot)ctx->failed=true;
                 return true;
             }
@@ -554,7 +635,7 @@ namespace PROJECT_NAME{
 namespace PROJECT_NAME{
     template<class N>
     constexpr N msb_on(){
-        return static_cast<N>(1)<<static_cast<N>(sizeof(N)*8-1);
+        return static_cast<N>(static_cast<N>(1)<<(static_cast<N>(sizeof(N)*8-1)));
     }
 
     template<class N>
@@ -579,21 +660,21 @@ namespace PROJECT_NAME{
         case 4:return sign?maxof<int>():maxof<unsigned int>();
         case 8:return sign?maxof<long long>():maxof<unsigned long long>();
         }
-        return -1;
+        return static_cast<unsigned long long>(-1);
     }
 
     constexpr int need_bytes(unsigned long long s,bool sign){
         if(sign){
-            if(s>maxof<long long>()){
+            if(s>(unsigned long long)maxof<long long>()){
                 return -1;
             }
-            else if(s>maxof<int>()){
+            else if(s> (unsigned long long)maxof<int>()){
                 return 8;
             }
-            else if(s>maxof<short>()){
+            else if(s> (unsigned long long)maxof<short>()){
                 return 4;
             }
-            else if(s>maxof<char>()){
+            else if(s> (unsigned long long)maxof<char>()){
                 return 2;
             }
             else{
@@ -627,7 +708,7 @@ namespace PROJECT_NAME{
             if(static_cast<size_t>(ed-be)!=idx){
                 return false;
             }
-            if(need_bytes(t)>sizeof(N))return false;
+            if(need_bytes(t,!is_unsigned<N>)>sizeof(N))return false;
             n=(N)t;
         }
         catch(...){

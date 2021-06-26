@@ -16,12 +16,13 @@ include_directories("commonlib")
 
 file(GLOB EASY_H "easyscript/*.h")
 file(GLOB EASY_CPP "easyscript/*.cpp")
+file(GLOB MODTEST "module_test/**")
 #file(GLOB HARD_H "hardscript/*.h")
 #file(GLOB HARD_SC "hardscript/*" "hardscript/*/*")
 
 
 add_library(easyscript SHARED ${EASY_CPP} ${EASY_H})
-add_executable(program "main.cpp")
+add_executable(program "main.cpp"  ${MODTEST})
 target_link_libraries(program easyscript)
 if(WIN32)
 target_link_libraries(netclient ws2_32)

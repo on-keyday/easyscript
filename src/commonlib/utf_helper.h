@@ -251,7 +251,7 @@ namespace PROJECT_NAME{
         return false;
     }
 
-    template<class Buf,class Ret,class Str=Buf>
+    template<class Buf,class Ret,class Str = Buf>
     bool utf8toutf16(Reader<Buf>* self,Ret& ret,int*& ctx,bool begin){
         static_assert(sizeof(typename Reader<Buf>::char_type)==1);
         static_assert(sizeof(ret[0])==2);
@@ -265,7 +265,7 @@ namespace PROJECT_NAME{
             return true;
         if(C==0){
             ret.push_back(C);
-            return true;
+            return false;
         }
         char32_t buf[]={C,0};
         Reader<char32_t*> read((char32_t*)buf);
@@ -287,7 +287,7 @@ namespace PROJECT_NAME{
         if(*ctx)return true;
         if(C==0){
             ret.push_back(C);
-            return true;
+            return false;
         }
         char32_t buf[]={C,0};
         Reader<char32_t*> read(buf);

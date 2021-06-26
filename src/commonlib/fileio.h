@@ -442,7 +442,7 @@ namespace PROJECT_NAME{
             close();
         }
 
-        FileMap(FileMap&& in){
+        FileMap(FileMap&& in)noexcept{
             move_common(std::forward<FileMap>(in));
         }
 

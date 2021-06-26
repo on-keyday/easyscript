@@ -63,8 +63,8 @@ namespace PROJECT_NAME{
     private:
         size_t pos=0;
         IgnoreHandler ignore_cb=nullptr;
-        bool stop=false;
-        bool refed=false;
+        //bool stop=false;
+        //bool refed=false;
 
         static bool default_cmp(Char c1,Char c2){
             return c1==c2;
@@ -111,37 +111,6 @@ namespace PROJECT_NAME{
             return str.size();
         }
 
-        bool endbuf(int ofs=0) const{
-            return (buf_size(buf)<=(size_t)(pos+ofs));
-        }
-
-        bool refcheck(){
-            if(refed){
-                auto s=buf_size(buf);
-                if(pos>=s){
-                    pos=s;
-                    stop=true;
-                }
-                else{
-                    stop=false;
-                }
-                refed=false;
-                return true;
-            }
-            return false;
-        }
-
-        bool ignore(){
-            if(endbuf())return false;
-            refcheck();
-            if(stop)return false;
-            if(ignore_cb){
-                stop=!ignore_cb(buf,pos,buf_size(buf));
-                return stop==false;
-            }
-            return true;
-        }
-
         template<class C>
         bool on_end(const C* s,size_t pos){
             return s[pos]== 0;
@@ -157,6 +126,42 @@ namespace PROJECT_NAME{
             return s.size()<=pos;
         }
 
+
+        bool endbuf(size_t bufsize,int ofs=0) const{
+            return (bufsize<=(size_t)(pos+ofs));
+        }
+
+        /*
+        bool refcheck(){
+            if(refed){
+                auto s=buf_size(buf);
+                if(pos>=s){
+                    pos=s;
+                    stop=true;
+                }
+                else{
+                    stop=false;
+                }
+                refed=false;
+                return true;
+            }
+            return false;
+        }*/
+
+        bool ignore(){
+            auto bs=buf_size(buf);
+            if(endbuf(bs))return false;
+            //refcheck();
+            //if(stop)return false;
+            if(ignore_cb){
+                //stop=!ignore_cb(buf,pos,buf_size(buf));
+                //return stop==false;
+                return ignore_cb(buf,pos,bs);
+            }
+            return true;
+        }
+
+        
         template<class T>
         bool invoke_not_expect(bool(*not_expect)(T t),Char c){
             if(!not_expect)return false;
@@ -172,13 +177,14 @@ namespace PROJECT_NAME{
             return false;
         }
 
-        template<class Str,class NotExpect=not_expect_default,class Cmp=cmp_default>
-        size_t ahead_detail(Str& str,NotExpect not_expect=NotExpect(),Cmp cmp=default_cmp){
+        template<class Str,class NotExpect,class Cmp>
+        size_t ahead_detail(Str& str,NotExpect not_expect,Cmp cmp){
             //if(!cmp)return 0;
             if(!ignore())return 0;
             size_t i=0;
+            size_t bufsize=buf_size(buf);
             for(;!on_end(str,i);i++){
-                if(endbuf(i))return 0;
+                if(endbuf(bufsize,(int)i))return 0;
                 if(!cmp(buf[pos+i],str[i]))return 0;
             }
             if(i==0)return 0;
@@ -186,11 +192,51 @@ namespace PROJECT_NAME{
             return i;
         }
 
+        template<class Str,class NotExpect,class Cmp>
+        inline size_t ahead_check(Str& str,NotExpect nexp,Cmp cmp){
+            return ahead_detail(str,nexp,cmp); 
+        }
+
+        template<class C,class NotExpect,class Cmp>
+        inline size_t ahead_check(const C* str,NotExpect nexp,Cmp cmp){
+            if(!str)return 0;
+            return ahead_detail(str,nexp,cmp); 
+        }
+
+        template<class C,class NotExpect,class Cmp>
+        inline size_t ahead_check(C* str,NotExpect nexp,Cmp cmp){
+            if(!str)return 0;
+            return ahead_detail(str,nexp,cmp); 
+        }
+
+        void copy(const Reader& from){
+            //refed=from.refed;
+            pos=from.pos;
+            ignore_cb=from.ignore_cb;
+            //stop=from.stop;
+        }
+
+        void move(Reader&& from){
+            pos=from.pos;
+            from.pos=0;
+            ignore_cb=from.ignore_cb;
+            from.ignore_cb=nullptr;
+            /*stop=from.stop;
+            from.stop=false;
+            refed=from.refed;
+            from.refed=false;*/
+        }
+
     public:
         using char_type=Char;
         using buf_type=Buf;
-        Reader(const Reader&)=delete;
-        Reader(Reader&&)=delete;
+        Reader(const Reader& from):buf(from.buf){
+            copy(from);
+        }
+
+        Reader(Reader&& from)noexcept:buf(std::forward<Buf>(from.buf)){
+            move(std::forward<Reader>(from));
+        }
 
         Reader(IgnoreHandler cb=nullptr):buf(Buf()){
             ignore_cb=cb;
@@ -206,12 +252,24 @@ namespace PROJECT_NAME{
             ignore_cb=cb;
         }
 
+        Reader& operator=(const Reader& from){
+            buf=from.buf;
+            copy(from);
+            return *this;
+        } 
+
+        Reader& operator=(Reader&& from){
+            buf=std::forward<Buf>(from.buf);
+            move(std::forward<Reader>(from));
+            return *this;
+        } 
 
         template<class Str,class NotExpect=not_expect_default,class Cmp=cmp_default>
         size_t ahead(Str& str,NotExpect not_expect=NotExpect(),Cmp cmp=default_cmp){
-            return ahead_detail(str,not_expect,cmp);
+            return ahead_check(str,not_expect,cmp);
         }
 
+        /*
         template<class C,class NotExpect=not_expect_default,class Cmp=cmp_default>
         size_t ahead(const C* str,NotExpect not_expect=NotExpect(),Cmp cmp=default_cmp){
             if(!str)return false;
@@ -222,7 +280,7 @@ namespace PROJECT_NAME{
         size_t ahead(C* str,NotExpect not_expect=NotExpect(),Cmp cmp=default_cmp){
             if(!str)return false;
             return ahead_detail(str,not_expect,cmp);
-        }
+        }*/
         
         template<class Str,class NotExpect=not_expect_default,class Cmp=cmp_default>
         bool expect(Str& str,NotExpect not_expect=NotExpect(),Cmp cmp=default_cmp){
@@ -246,27 +304,28 @@ namespace PROJECT_NAME{
             return offset(0);
         }
 
-        bool seek(size_t pos,bool strict=false){
-            if(buf_size(buf)<=pos){
+        bool seek(size_t p,bool strict=false){
+            if(auto sz=buf_size(buf);sz<=p){
                 if(strict)return false;
-                pos=buf_size(buf);
+                p=sz;
             }
-            this->pos=pos;
-            if(!endbuf())stop=false;
+            this->pos=p;
+            //if(!endbuf())stop=false;
             return true;
         }
 
         bool increment(){
-            return seek(pos+1);
+            return seek(pos+1,true);
         }
 
         Char offset(int ofs) const{
-            if(endbuf(ofs))return Char();
+            if(endbuf(buf_size(buf),ofs))return Char();
             return buf[pos+ofs];
         }
 
         bool ceof(int ofs=0) const {
-            return stop||endbuf(ofs);
+            return //stop||
+            endbuf(buf_size(buf),ofs);
         }
 
         bool eof() {
@@ -274,11 +333,12 @@ namespace PROJECT_NAME{
             return ceof();
         }
 
+        /*
         bool release(){
             if(endbuf())return false;
             stop=false;
             return true;
-        }
+        }*/
 
         size_t readpos() const {
             return pos;
@@ -299,8 +359,9 @@ namespace PROJECT_NAME{
         template<class T>
         size_t read_byte(T* res=nullptr,size_t size=sizeof(T),
         T (*endian_handler)(const char*)=translate_byte_as_is,bool strict=false){
-            static_assert(sizeof(decltype(buf[0]))==1);
+            static_assert(sizeof(Char)==1);
             if(strict&&readable()<size)return 0;
+            auto bs=buf_size(buf);
             size_t beginpos=pos;
             if(res){
                 if (!endian_handler)return 0;
@@ -313,7 +374,7 @@ namespace PROJECT_NAME{
                     for(auto i=0;i<max;i++){
                         pass[i]=buf[pos];
                         pos++;
-                        if(endbuf()){
+                        if(endbuf(bs)){
                             break;
                         }
                     }
@@ -324,13 +385,13 @@ namespace PROJECT_NAME{
             else{
                 pos+=size;
             }
-            if(endbuf()){
-                pos=buf.size();
+            if(endbuf(bs)){
+                pos=bs;
             }
             return pos-beginpos;
         }
 
-        Buf& ref(){refed=true;return buf;}
+        Buf& ref(){/*refed=true;*/return buf;}
 
     private:
 
@@ -372,14 +433,15 @@ namespace PROJECT_NAME{
             if(!func(this,true))return false;
             auto ig=set_ignore(nullptr);
             bool ok=false;
-            while(!endbuf()){
+            auto bs=buf_size(buf);
+            while(!endbuf(bs)){
                 if(func(this,false)){
                     ok=true;
                     break;
                 }
                 pos++;
             }
-            if(endbuf()){
+            if(endbuf(bs)){
                 auto t=func(nullptr,false);
                 if(usecheckers)ok=t;
             }

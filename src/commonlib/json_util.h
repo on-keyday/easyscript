@@ -258,22 +258,27 @@ namespace PROJECT_NAME{
 
 
         template<class Buf>
-        static JSON parse_json_detail(Reader<Buf>& reader){
+        static JSON parse_json_detail(Reader<Buf>& reader,const char** err){
+            auto error=[&](const char* msg){
+                *err=msg;
+                return JSON();
+            };
             const char* expected=nullptr;
             if(reader.expect("{")){
                 JSON ret("",JSONType::object);
                 if(!reader.expect("}")){
                     while(true){
                         std::string key;
-                        if(!reader.ahead("\""))throw "expect \" but not";
-                        if(!reader.string(key,true))throw "unreadable key";
-                        if(!reader.expect(":"))throw "expect : but not";
+                        if(!reader.ahead("\""))return error("expect \" but not");
+                        if(!reader.string(key,true))return error("unreadable key");
+                        if(!reader.expect(":"))return error("expect : but not");
                         key.pop_back();
                         key.erase(0,1);
-                        auto tmp=parse_json_detail(reader);
+                        auto tmp=parse_json_detail(reader,&expected);
+                        if(expected)return error(expected);
                         ret[key]=tmp;
                         if(reader.expect(","))continue;
-                        if(!reader.expect("}"))throw "expected , or } but not";  
+                        if(!reader.expect("}"))return error("expected , or } but not");  
                         break;
                     }
                 }
@@ -283,10 +288,11 @@ namespace PROJECT_NAME{
                 JSON ret("",JSONType::array);
                 if(!reader.expect("]")){
                     while(true){
-                        auto tmp=parse_json_detail(reader);
+                        auto tmp=parse_json_detail(reader,&expected);
+                        if(expected)return error(expected);
                         ret.push_back(std::move(tmp));
                         if(reader.expect(","))continue;
-                        if(!reader.expect("]"))throw "expect , or ] but not";
+                        if(!reader.expect("]"))return error("expect , or ] but not");
                         break;
                     }
                 }
@@ -294,7 +300,7 @@ namespace PROJECT_NAME{
             }
             else if(reader.ahead("\"")){
                 std::string str;
-                if(!reader.string(str,true))throw "unreadable key";
+                if(!reader.string(str,true))return error("unreadable string");
                 str.pop_back();
                 str.erase(0,1);
                 return JSON(str,JSONType::string);
@@ -308,13 +314,13 @@ namespace PROJECT_NAME{
                 NumberContext<char> ctx;
                 reader.readwhile(num,number,&ctx);
                 if(ctx.failed)
-                    throw "invalid number";
+                    return error("invalid number");
                 if(ctx.radix!=10)
-                    throw "radix is not 10";
+                    return error("radix is not 10");
                 auto parse_fl=[&]{
                     double f;
                     if(!parse_float(num,f)){
-                        throw "undecodable number";
+                        return error("undecodable number");
                     }
                     return JSON(minus?-f:f);
                 };
@@ -382,7 +388,7 @@ namespace PROJECT_NAME{
             else if(reader.expect("null",is_c_id_usable)){
                 return JSON(nullptr);
             }
-            throw "not json";
+            return error("not json");
         }
 
         std::string to_string_detail(JSONFormat format,size_t ofs,size_t indent,size_t base_skip) const{
@@ -497,8 +503,8 @@ namespace PROJECT_NAME{
                         }
                     };
                     s+="\\u00";
-                    s+=translate(msb);
-                    s+=translate(lsb);
+                    s+=translate((unsigned char)msb);
+                    s+=translate((unsigned char)lsb);
                 }
                 else{
                     s+=c;
@@ -874,25 +880,22 @@ namespace PROJECT_NAME{
         template<class Buf>
         bool parse_assign(Reader<Buf>& r,const char** err=nullptr){
             auto ig=r.set_ignore(ignore_space_line);
+            const char* e=nullptr;
+            JSON tmp;
             try{    
-                *this=parse_json_detail(r);
+                tmp=parse_json_detail(r,&e);
             }   
-            catch(const char* c){
-                if(err){
-                    *err=c;
-                }
-                r.set_ignore(ig);
-                return false;
-            }
             catch(...){
-                if(err){
-                    *err="number parse error";
-                }
-                r.set_ignore(ig);
-                return false;
+                e="exception:unknown error";
+            }
+            if(err){
+                *err=e;
+            }
+            if(e==nullptr){
+                *this=std::move(tmp);
             }
             r.set_ignore(ig);
-            return true;
+            return e==nullptr;
         }
 
         std::string to_string(size_t indent=0,JSONFormat format=JSONFormat::defaultf) const{
@@ -944,9 +947,9 @@ namespace PROJECT_NAME{
                 return (T)numi;
             };
             switch(sizeof(T)){
-            case 1:return check((signed char)0x80,0x7f);
-            case 2:return check((signed short)0x8000,0x7fff);
-            case 4:return check((signed int)0x80000000,0x7fffffff);
+            case 1:return check(msb_on<signed char>(),0x7f);
+            case 2:return check(msb_on<signed short>(),0x7fff);
+            case 4:return check(msb_on<signed int>(),0x7fffffff);
             case 8:{
                 if(type==JSONType::unsignedi&& numi<0){
                     throw "out of range";
@@ -977,7 +980,7 @@ namespace PROJECT_NAME{
             case 1:return check(0xff);
             case 2:return check(0xffff);
             case 4:return check(0xffffffff);
-            case 8:return numu;
+            case 8:return (T)numu;
             default:
                 throw "too large number size";
             }
@@ -1252,7 +1255,7 @@ namespace PROJECT_NAME{
                         return base;
                     }
                     if(!parse_ull(name,pos))return nullptr;
-                    auto hold=base->idx(pos);
+                    hold=base->idx(pos);
                     if(!hold){
                         if(r.ceof()){
                             lastelm=name;

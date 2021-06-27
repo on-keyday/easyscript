@@ -18,7 +18,8 @@
 #include<json_util.h>
 #include<refactering/reader.hpp>
 #include"bunkai/eval.h"
-
+#include<utf_helper.h>
+#include<utfreader.h>
 
 using namespace PROJECT_NAME;
 using strreader=Reader<std::string>;
@@ -77,7 +78,7 @@ int WaitProxy(void* ctx,const char* membname,ArgContext* arg){
 
 void test2(){
     JSON js;
-    Reader<FileMap> num(R"()");
+    Reader<FileMap> num(R"(c:/users/ukfco/downloads/canada.json)");
     std::cout << num.ref().size() << "\n";
     auto start=std::chrono::system_clock::now();
     js.parse_assign(num);
@@ -86,7 +87,7 @@ void test2(){
     auto begin=std::chrono::system_clock::now();
     auto jstr=js.to_string();
     auto fin=std::chrono::system_clock::now();
-    std::cout << jstr;
+    //std::cout << jstr;
     std::cout << std::chrono::duration_cast<std::chrono::milliseconds>(end-start).count() << "\n";
     std::cout << std::chrono::duration_cast<std::chrono::milliseconds>(fin-begin).count() << "\n";
 }
@@ -174,10 +175,23 @@ auto test1(){
     JSON js;
     ownermap(js,tok);
     std::ofstream("ownermap.json") << js.to_string(4);
-    return js;
+    std::cout << std::chrono::duration_cast<std::chrono::microseconds>(end-start).count() << "\n";
+    return tok;
 }
 
-
+void test3(){
+    Reader<ToUTF16<std::u32string>> r(
+        std::u32string(U"こんにちは初音ミクだよ。高音テストを始めるよ。"
+        U"高音廚のお前らならば朝飯前だよね。")
+    );
+    //Reader<ToUTF16<std::u32string>> s(std::u32string(U"こんにちは"));
+    r.expect(u"こんにちは");
+    r.seek(1);
+    r.expect(u"ん");
+    //r.expect(u8"こんにちは");
+    /*r.expect("こんにちは初音ミクだよ。高音テストを始めるよ。");
+    r.expect(U"高音廚");*/
+}
 
 int main(int argc,char** argv){
     auto script=make_script();
@@ -193,5 +207,10 @@ int main(int argc,char** argv){
     delete_script(script);
     //hardtest();
     //auto ret=netclient_argv(argc,argv);
+
+    //test1();
+    //test2();
+    test3();
+    ast::check_assert();
     return 0;
 }

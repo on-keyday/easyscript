@@ -40,7 +40,11 @@ namespace PROJECT_NAME{
         noendline=space|afterspace,
         noendlinetab=tab|afterspace
     };
-
+    
+    auto operator|(JSONFormat l,JSONFormat r){
+        using basety=std::underlying_type_t<JSONFormat>;
+        return static_cast<JSONFormat>((basety)l|(basety)r);
+    }
     
     struct EasyStr{
     private:

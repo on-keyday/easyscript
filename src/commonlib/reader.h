@@ -163,17 +163,17 @@ namespace PROJECT_NAME{
 
         
         template<class T>
-        bool invoke_not_expect(bool(*not_expect)(T t),Char c){
+        bool invoke_not_expect(bool(*not_expect)(T t),Buf& b,size_t ofs){
             if(!not_expect)return false;
-            return not_expect(c);
+            return not_expect(b[ofs]);
         } 
 
         template<class Func>
-        bool invoke_not_expect(Func& not_expect,Char c){
-            return not_expect(c);
+        bool invoke_not_expect(Func& not_expect,Buf& b,size_t ofs){
+            return not_expect(b[ofs]);
         }
 
-        bool invoke_not_expect(std::nullptr_t,Char){
+        bool invoke_not_expect(std::nullptr_t,Buf&,size_t){
             return false;
         }
 
@@ -188,7 +188,7 @@ namespace PROJECT_NAME{
                 if(!cmp(buf[pos+i],str[i]))return 0;
             }
             if(i==0)return 0;
-            if(invoke_not_expect(not_expect,buf[pos+i]))return 0;
+            if(invoke_not_expect(not_expect,buf,pos+i))return 0;
             return i;
         }
 
@@ -305,7 +305,7 @@ namespace PROJECT_NAME{
         }
 
         bool seek(size_t p,bool strict=false){
-            if(auto sz=buf_size(buf);sz<=p){
+            if(auto sz=buf_size(buf);sz<p){
                 if(strict)return false;
                 p=sz;
             }
@@ -316,6 +316,10 @@ namespace PROJECT_NAME{
 
         bool increment(){
             return seek(pos+1,true);
+        }
+
+        bool decrement(){
+            return seek(pos-1,true);
         }
 
         Char offset(int ofs) const{

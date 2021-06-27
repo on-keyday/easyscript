@@ -856,7 +856,7 @@ Status command_one(Reader<std::string>& cmdline,HTTPClient& client,flags& flag){
             return Status::argnumnotmatch;  
         }
         if (_chdir(dir.c_str())) {
-			print_hookln(dir, ":no such dirctry");
+			print_hookln(dir, ":no such directory");
 			return Status::argconditionnotmatch;
 		}
         return Status::cdchanged;

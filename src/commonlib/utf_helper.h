@@ -10,6 +10,54 @@
 #include<Windows.h>
 #endif
 namespace PROJECT_NAME{
+
+    struct U8MiniBuffer{
+        unsigned char minbuf[4]={0};
+        size_t pos=0;
+
+        void push_back(unsigned char c){
+            if(pos>=4)return;
+            minbuf[pos]=c;
+            pos++;
+        }
+
+        size_t size()const{
+            return pos;
+        }
+
+        unsigned char operator[](size_t p){
+            if(p>=4)return char();
+            return minbuf[p];
+        }
+
+        void reset(){
+            pos=0;
+        }
+    };
+
+    struct U16MiniBuffer{
+        unsigned short minbuf[2]={0};
+        size_t pos=0;
+
+        void push_back(unsigned short c){
+            if(pos>=2)return;
+            minbuf[pos]=c;
+            pos++;
+        }
+
+        size_t size()const{
+            return pos;
+        }
+
+        char16_t operator[](size_t p){
+            if(p>=2)return char();
+            return minbuf[p];
+        }
+
+        void reset(){
+            pos=0;
+        }
+    };
     
     inline unsigned char utf8bits(int i){
         const unsigned char maskbits[]={
@@ -33,16 +81,10 @@ namespace PROJECT_NAME{
         return (utf8bits(i)&c)==utf8bits(i-1)?utf8bits(i-1):0;
     }
 
-    template<class Buf,class Ret>
-    bool utf8_read(Reader<Buf>* self,Ret& ret,int*& ctx,bool begin){
-        static_assert(sizeof(typename Reader<Buf>::char_type)==1);
-        if(begin){
-            if(!ctx)return false;
-            return true;
-        }
-        if(!self)return true;
+    template<class Buf>
+    bool check_utf8bits(Reader<Buf>* self,int& ctx,int ofsdef=0){
         auto r=[&](int ofs=0){
-            return (unsigned char)self->offset(ofs);
+            return (unsigned char)self->offset(ofs+ofsdef);
         };
         auto mask=[&r](auto i,int ofs=0){
             return utf8mask(r(ofs),i);
@@ -52,6 +94,56 @@ namespace PROJECT_NAME{
         };
         int range=0;
         if(r()<0x80){
+            range=1;
+        }
+        else if(mask(2)){
+            range=2;
+            if(!needbits(0,5)){
+                ctx=1;
+                return false;
+            }
+        }
+        else if(mask(3)){
+            range=3;
+            if(!needbits(0,6)&&!needbits(1,7)){
+                ctx=12;
+                return false;
+            }
+        }
+        else if(mask(4)){
+            range=4;
+            if(!needbits(0,8)&&!needbits(1,9)){
+                ctx=12;
+                return false;
+            }
+        }
+        else{
+            ctx=1;
+            return false;
+        }
+        ctx=range;
+        return true;
+    }
+
+    template<class Buf,class Ret>
+    bool utf8_read(Reader<Buf>* self,Ret& ret,int*& ctx,bool begin){
+        static_assert(sizeof(typename Reader<Buf>::char_type)==1);
+        if(begin){
+            if(!ctx)return false;
+            return true;
+        }
+        if(!self)return true;
+        /*auto r=[&](int ofs=0){
+            return (unsigned char)self->offset(ofs);
+        };*/
+        auto mask=[&self](auto i,int ofs=0){
+            return utf8mask((unsigned char)self->offset(ofs),i);
+        };
+        /*auto needbits=[&r](int ofs,int masknum){
+            return r(ofs)&utf8bits(masknum);
+        };*/
+        int range=0;
+        /*if(r()<0x80){
             range=1;
         }
         else if(mask(2)){
@@ -77,6 +169,10 @@ namespace PROJECT_NAME{
         else{
             *ctx=1;
             return true;
+        }*/
+        if(!check_utf8bits(self,range)){
+            *ctx=range;
+            return true;
         }
         for(auto i=0;i<range;i++){
             if(i){
@@ -86,14 +182,15 @@ namespace PROJECT_NAME{
                     return true;
                 }
             }
-            ret.push_back(r());
+            ret.push_back(self->achar());
         }
         return false;
     }
 
-    template<class Buf,class Str>
-    char32_t utf8toutf32_impl(Reader<Buf>* self,int*& ctx){
-        Str buf;
+    template<class Buf>/*,class Str>*/
+    char32_t utf8toutf32_impl(Reader<Buf>* self,int* ctx){
+        //Str buf;
+        U8MiniBuffer buf;
         utf8_read(self,buf,ctx,false);
         if(*ctx)return 0;
         auto len=(int)buf.size();
@@ -122,7 +219,7 @@ namespace PROJECT_NAME{
         return (char32_t)make();
     }
 
-    template<class Buf,class Ret,class Str=Buf>
+    template<class Buf,class Ret>
     bool utf8toutf32(Reader<Buf>* self,Ret& ret,int*& ctx,bool begin){
         static_assert(sizeof(typename Reader<Buf>::char_type)==1);
         static_assert(sizeof(ret[0])==4);
@@ -131,7 +228,7 @@ namespace PROJECT_NAME{
             return true;
         }
         if(!self)return true;
-        auto c=utf8toutf32_impl<Buf,Str>(self,ctx);
+        auto c=utf8toutf32_impl(self,ctx);
         if(*ctx)return true;
         ret.push_back(c);
         return false;
@@ -182,14 +279,26 @@ namespace PROJECT_NAME{
         return false;
     }
 
+    bool is_utf16_surrogate_high(unsigned short C){
+        return 0xD800<=C&&C<=0xDC00;
+    }
+
+    bool is_utf16_surrogate_low(unsigned short C){
+       return 0xDC00 <= C && C < 0xE000;
+    }
+
+    char32_t make_surrogate_char(unsigned short first,unsigned short second){
+        return 0x10000 + (first - 0xD800) * 0x400 +(second - 0xDC00);
+    }
+
     template<class Buf>
-    char32_t utf16toutf32_impl(Reader<Buf>* self,int*& ctx){
+    char32_t utf16toutf32_impl(Reader<Buf>* self,int* ctx){
         auto C=self->achar();
         auto hi=[&C]{
-            return 0xD800<=C&&C<=0xDC00;
+            return is_utf16_surrogate_high(C);
         };
         auto low=[&C]{
-            return 0xDC00 <= C && C < 0xE000;
+            return is_utf16_surrogate_low(C);
         };
         if(hi()){
             auto first=C;
@@ -199,8 +308,7 @@ namespace PROJECT_NAME{
                 *ctx=2;
                 return true;
             }
-            uint32_t S=0x10000 + (first - 0xD800) * 0x400 +(C- 0xDC00);
-            return S;
+            return make_surrogate_char(first,C);
         }
         else{
             return C;
@@ -251,7 +359,7 @@ namespace PROJECT_NAME{
         return false;
     }
 
-    template<class Buf,class Ret,class Str = Buf>
+    template<class Buf,class Ret>
     bool utf8toutf16(Reader<Buf>* self,Ret& ret,int*& ctx,bool begin){
         static_assert(sizeof(typename Reader<Buf>::char_type)==1);
         static_assert(sizeof(ret[0])==2);
@@ -260,7 +368,7 @@ namespace PROJECT_NAME{
             return true;
         }
         if(!self)return true;
-        auto C=utf8toutf32_impl<Buf,Str>(self,ctx);
+        auto C=utf8toutf32_impl(self,ctx);
         if(*ctx)
             return true;
         if(C==0){
@@ -298,7 +406,7 @@ namespace PROJECT_NAME{
 
 #ifdef _WIN32
 
-    template<class Buf,class Ret,class Str=Buf>
+    template<class Buf,class Ret>
     bool sjistoutf16(Reader<Buf>* self,Ret& ret,int*& ctx,bool begin){
         static_assert(sizeof(typename Reader<Buf>::char_type)==1);
         static_assert(sizeof(ret[0])==2);
@@ -340,4 +448,58 @@ namespace PROJECT_NAME{
     }
 #endif
 
+    template<class Buf>
+    bool utf8seek_minus(Reader<Buf>* self){
+        if(!self)return false;
+        if(self->readpos()<1)return false;
+        if(static_cast<unsigned char>(self->offset(-1))<0x7f){
+            self->decrement();
+            return true;
+        }
+        if(self->readpos()<2)return false;
+        int range=0;
+        auto mask=[&self](auto i,int ofs=0){
+            return utf8mask((unsigned char)self->offset(ofs),i);
+        };
+        auto check=[&](auto count){
+            if(check_utf8bits(self,range,-count)){
+                if(range==count){
+                    for(auto i=0;i<count-1;i++){
+                        if(!mask(1,-i-1)){
+                            return false;
+                        }
+                    }
+                    for(auto i=0;i<count;i++){
+                        self->decrement();
+                    }
+                    return true;
+                }
+            }
+            return false;
+        };
+        if(check(2))return true;
+        if(self->readpos()<3)return false;
+        if(check(3))return true;
+        if(self->readpos()<4)return false;
+        if(check(4))return true;
+        return false;
+    }
+
+    template<class Buf>
+    bool utf16seek_minus(Reader<Buf>* self){
+        if(!self)return false;
+        if(self->readpos()==0){
+            return false;
+        }
+        if(self->readpos()>=2){
+            if(is_utf16_surrogate_high(self->offset(-2))&&
+               is_utf16_surrogate_low(self->offset(-1))){
+                self->decrement();
+                self->decrement();
+                return true;
+            }
+        }
+        self->decrement();
+        return true;
+    }
 }

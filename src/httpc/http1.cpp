@@ -212,7 +212,7 @@ bool HTTPClient::method_detail(const char* method,const char* url,const char* bo
         return false;
     }
     if(!sock.connect(port,true)){
-        set_err("connet error");
+        set_err("connect error");
 #if USE_SSL
         std::string got;
         ERR_print_errors_cb([](const char* str,size_t len,void* to){

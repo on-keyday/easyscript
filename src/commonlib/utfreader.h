@@ -1,5 +1,4 @@
 #include"utf_helper.h"
-#include<string>
 namespace PROJECT_NAME{
     template<class Buf>
     using b_char_type=typename Reader<Buf>::char_type;
@@ -82,6 +81,10 @@ namespace PROJECT_NAME{
 
         Buf& ref(){
             return r.ref();
+        }
+
+        Reader<Buf>& base_reader(){
+            return r;
         }
 
         ToUTF32_impl(){}
@@ -185,14 +188,28 @@ namespace PROJECT_NAME{
             return minbuf.size()-ofs;
         }
 
+        Buf& ref(){
+            return r.ref();
+        }
+
+        size_t reset(size_t pos=0){
+            err=false;
+            r.seek(0);
+            auto ret=count();
+            r.seek(pos);
+            return ret;
+        }
+
+        Reader<Buf>& base_reader(){
+            return r;
+        }
+
         FromUTF32_impl(){}
 
         FromUTF32_impl(Buf&& in):r(std::forward<Buf>(in)){}
         FromUTF32_impl(const Buf& in):r(in){}
 
-        Buf& ref(){
-            return r.ref();
-        }
+        
     };
 
     template<class Buf>
@@ -295,6 +312,10 @@ namespace PROJECT_NAME{
             _size=impl.reset(pos);
             return impl.err;
         }
+
+        Reader<Buf>& base_reader(){
+            return impl.base_reader();
+        }
     };
 
     template<class Buf>
@@ -338,6 +359,23 @@ namespace PROJECT_NAME{
 
         size_t size()const{
             return _size;
+        }
+
+        Buf* operator->()const{
+            return std::addressof(impl.ref());
+        }
+
+        bool reset(size_t pos=0){
+            /*err=false;
+            _size=count();
+            r.seek(pos);
+            return true;*/
+            _size=impl.reset(pos);
+            return impl.err;
+        }
+
+        Reader<Buf>& base_reader(){
+            return impl.base_reader();
         }
     };
 
@@ -465,6 +503,11 @@ namespace PROJECT_NAME{
         Buf* operator->(){
             return std::addressof(impl.ref());
         }
+
+        Reader<Buf>& base_reader(){
+            return impl.base_reader();
+        }
+
     };
 
     template<class Buf,int N=sizeof(b_char_type<Buf>)>
@@ -509,6 +552,10 @@ namespace PROJECT_NAME{
         Buf* operator->(){
             return std::addressof(impl.ref());
         }
+
+        Reader<Buf>& base_reader(){
+            return impl.base_reader();
+        }
     };
 
     template<class Buf>
@@ -549,6 +596,10 @@ namespace PROJECT_NAME{
 
         Buf* operator->(){
             return std::addressof(impl.ref());
+        }
+
+        Reader<Buf>& base_reader(){
+            return impl.base_reader();
         }
     };
 
@@ -591,5 +642,33 @@ namespace PROJECT_NAME{
         Buf* operator->(){
             return std::addressof(impl.ref());
         }
+
+        Reader<Buf>& base_reader(){
+            return impl.base_reader();
+        }
+    };
+
+    template<class Buf,class T>
+    struct ByteTo{
+        static_assert(sizeof(b_char_type<Buf>)==1);
+        constexpr int sof=sizeof(T);
+        Buf buf;
+        T operator[](size_t pos)const{
+            if(buf.size()%sof)return T();
+            if(sof*(pos+1)>buf.size()){
+                return T();
+            }
+            char buf[sof]={0};
+            for(auto i=0;i<sof;i++){
+                buf[i]=buf[sof*pos+i];
+            }
+            return translate_byte_as_is<T>(buf);
+        }
+
+        size_t size()const{
+            return buf.size()/sof;
+        }
+
+        ByteTo(){}
     };
 }

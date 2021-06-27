@@ -184,13 +184,6 @@ void test3(){
         std::u32string(U"こんにちは初音ミクだよ。高音テストを始めるよ。"
         U"高音廚のお前らならば朝飯前だよね。")
     );
-    //Reader<ToUTF16<std::u32string>> s(std::u32string(U"こんにちは"));
-    r.expect(u"こんにちは");
-    r.seek(1);
-    r.expect(u"ん");
-    //r.expect(u8"こんにちは");
-    /*r.expect("こんにちは初音ミクだよ。高音テストを始めるよ。");
-    r.expect(U"高音廚");*/
 }
 
 int main(int argc,char** argv){

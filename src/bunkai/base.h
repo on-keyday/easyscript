@@ -38,7 +38,7 @@ namespace ast{
         if(!t)return;
         alloced--;
         size-=sizeof(T);
-        peek_mem(t,-sizeof(T));
+        peek_mem(t,-static_cast<long long>(sizeof(T)));
         refs.erase((void*)t);
         delete t;
     }

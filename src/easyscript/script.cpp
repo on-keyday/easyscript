@@ -1,4 +1,9 @@
-/*license*/
+/*
+    Copyright (c) 2021 on-keyday
+    Released under the MIT license
+    https://opensource.org/licenses/mit-license.php
+*/
+
 #define DLL_EXPORT __declspec(dllexport)
 #include"interpret.h"
 #include"script.h"

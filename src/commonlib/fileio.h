@@ -9,7 +9,7 @@
 #ifdef _WIN32
 #include<Windows.h>
 #include<io.h>
-#elif defined(__linux__)
+#elif defined(__linux__)||defined(__APPLE__)||defined(__ANDROID__)
 #include<sys/mman.h>
 #include <fcntl.h>
 #include<unistd.h>
@@ -339,7 +339,7 @@ namespace PROJECT_NAME{
             return true;
         }
 
-    #elif defined(__linux__)
+#elif defined(__linux__)||defined(__APPLE__)||defined(__ANDROID__)
         int fd=-1;
         long maplen=0;
 
@@ -482,7 +482,7 @@ namespace PROJECT_NAME{
             return place;
         }
     };
-#ifdef fileno
-#undef fileno
+#ifdef _fileno
+#undef _fileno
 #endif
 }

@@ -13,7 +13,7 @@ namespace eval{
         TyPool& pool;
         using SToken=ast::SAstToken;
         using AstKind=ast::AstKind;
-#define opfunc(op) [](auto l,auto r){return l op r;}
+
 
         template<class E>
         E opeval(AstKind kind,E& l,E& r){
@@ -160,5 +160,4 @@ namespace eval{
         Evaluator(TyPool& in):pool(in){}
     };
 
-#undef opfunc
 }

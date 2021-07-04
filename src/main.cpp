@@ -1,9 +1,4 @@
-/*
-    Copyright (c) 2021 on-keyday
-    Released under the MIT license
-    https://opensource.org/licenses/mit-license.php
-*/
-
+/*license*/
 #include"commonlib/reader.h"
 #include"commonlib/basic_helper.h"
 #include<string>
@@ -16,10 +11,12 @@
 #include<fileio.h>
 #include<charconv>
 #include<json_util.h>
-#include<refactering/reader.hpp>
 #include"bunkai/eval.h"
 #include<utf_helper.h>
 #include<utfreader.h>
+#include<extension_operator.h>
+#include<cmdline_ctx.h>
+#include<set>
 
 using namespace PROJECT_NAME;
 using strreader=Reader<std::string>;
@@ -175,15 +172,56 @@ auto test1(){
     JSON js;
     ownermap(js,tok);
     std::ofstream("ownermap.json") << js.to_string(4);
-    std::cout << std::chrono::duration_cast<std::chrono::microseconds>(end-start).count() << "\n";
+    std::cout << std::chrono::duration_cast<std::chrono::milliseconds>(end-start).count() << "\n";
     return tok;
 }
 
-void test3(){
-    Reader<ToUTF16<std::u32string>> r(
-        std::u32string(U"こんにちは初音ミクだよ。高音テストを始めるよ。"
-        U"高音廚のお前らならば朝飯前だよね。")
-    );
+Reader<Order<FileMap,char16_t>> test3(){
+    Reader<FileMap> r(FileMap("../../../src/bunkai_src/test.txt"));
+    if(r.expect("\xFE\xFF")){
+        Reader<Order<FileMap,char16_t>> read(std::move(r.ref()));
+        read.seek(1);
+        read.ref().set_reverse(true);
+        return read;
+    }
+    else if(r.expect("\xFF\xFE")){
+        Reader<Order<FileMap,char16_t>> read(std::move(r.ref()));
+        read.seek(1);
+        return read;
+    }
+    exit(0);
+}
+
+void test4(){
+    //setlocale(LC_ALL,".UTF-8");
+    //SetConsoleCP(CP_UTF8);
+    /*Reader<std::string> op("84672937");
+    int t=0;
+    op >> t;
+    std::u8string str,inter;
+    std::string in;
+    std::getline(std::cin,in);
+    StrStream(in) >> nativefilter >> u8filter >> igws >> is_c_id_usable<char> >> str >> inter;
+    */
+    CmdlineCtx<std::string,std::string,std::map,std::vector> ctx;
+    ctx.register_paramproc(defcmdlineproc_impl<std::string>);
+    ctx.register_error(
+        [](auto& name,auto in1,auto& in2,auto in3){std::cout << in1 << in2 << in3;});
+    auto testcmd=ctx.register_command("test",[](const auto& ctx,int,int){
+        ctx.log(std::cout,"test called");
+        return 0;
+    });
+    auto forcmd=ctx.register_subcommand(testcmd,"for",/*[](const auto& ctx){
+        ctx.printlog(std::cout,"test for called");
+        ctx.printlog(std::cout,ctx.exists_option("-long"));
+        return 0;
+    }*/nullptr);
+    ctx.register_by_optname(forcmd,
+    {{"-long","l"}});
+    ctx.execute([](auto& input){
+        std::getline(std::cin,input.ref());
+        return true;
+    });
 }
 
 int main(int argc,char** argv){
@@ -203,7 +241,9 @@ int main(int argc,char** argv){
 
     //test1();
     //test2();
-    test3();
+    //auto r=test3();
+    //r.expect(u"下");
+    test4();
     ast::check_assert();
     return 0;
 }

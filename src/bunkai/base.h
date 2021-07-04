@@ -16,7 +16,7 @@ namespace ast{
     }
 
     inline void peek_mem(void* p,long long in){
-        memprint(std::cout,p,in);
+        //memprint(std::cout,p,in);
         memprint(profile,p,in);
     }
 
@@ -46,10 +46,10 @@ namespace ast{
     inline void check_assert(){
         if(alloced){
             auto print=[](auto& o,auto& v){
-                o<< "\"pointer\":" << (uintptr_t)v.first << ",size:" <<v.second << "\n";
+                o<< "pointer:" << (uintptr_t)v.first << ",size:" <<v.second << "\n";
             };
             for(auto& v:refs){
-                print(std::cout,v);
+                //print(std::cout,v);
                 print(profile,v);
             }
             //assert(false);

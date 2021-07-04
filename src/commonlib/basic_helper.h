@@ -1,9 +1,4 @@
-/*
-    Copyright (c) 2021 on-keyday
-    Released under the MIT license
-    https://opensource.org/licenses/mit-license.php
-*/
-
+/*license*/
 #pragma once
 #include"reader.h"
 #include<cstring>
@@ -35,6 +30,25 @@ namespace PROJECT_NAME{
         Refer(Buf& in):buf(in){}
     };
 
+    template<class C>
+    struct Sized{
+        C* ptr=nullptr;
+        size_t _size=0;
+        constexpr Sized(C* inptr,size_t sz):ptr(inptr),_size(sz){}
+
+        template<size_t sz>
+        constexpr Sized(C (&inptr)[sz]):ptr((C*)inptr),_size(sz){}
+
+        constexpr C operator[](size_t pos)const{
+            if(pos>=_size)return C();
+            return ptr[pos];
+        }
+
+        constexpr size_t size()const{
+            return _size;
+        }
+    };
+
 
     template<class T>
     struct Ref {
@@ -58,6 +72,7 @@ namespace PROJECT_NAME{
         bool strict_hex=false;
         bool must_sandwichdot=false;
         bool top_no_zero=false;
+        bool only_int=false;
 
         int radix=0;
         bool floatf=false;
@@ -132,6 +147,11 @@ namespace PROJECT_NAME{
     template<class Char>
     bool is_url_scheme_usable(Char c){
         return is_alpha_or_num(c)||c==(Char)'+';
+    }
+
+    template <class Char>
+    bool do_nothing(Char){
+        return true;
     }
 
 
@@ -333,11 +353,16 @@ namespace PROJECT_NAME{
     }
 
     template<class T>
-    bool defcmdlineproc(T& p){
+    void defcmdlineproc_impl(T& p){
         if(is_string_symbol(p[0])){
             p.pop_back();
             p.erase(0,1);
         }
+    }
+
+    template<class T>
+    bool defcmdlineproc(T& p){
+        defcmdlineproc_impl(p);
         return true;
     }
 
@@ -349,11 +374,11 @@ namespace PROJECT_NAME{
     template<class Buf,class Now,class... Args>
     bool get_cmdline(Reader<Buf>& r,int mincount,bool fit,Now& now,Args&... arg){
         int i=0;
+        r.ahead("'");
         r.readwhile(now,cmdline_read,&i);
         if(i==0){
             return mincount==0;
         }
-        r.ahead("'");
         if(fit&&mincount==0){
             return true;
         }
@@ -481,7 +506,6 @@ namespace PROJECT_NAME{
             n=self->achar();
         };
         if(begin){
-            //ctx->beginpos=self->readpos();
             ctx->expf=false;
             ctx->failed=false;
             ctx->floatf=false;
@@ -499,7 +523,7 @@ namespace PROJECT_NAME{
                 ret.push_back((Char)self->offset(-1));
                 n = self->achar();
                 if(n==ctx->dotsymbol){
-                    if(ctx->must_sandwichdot){
+                    if(ctx->must_sandwichdot||ctx->only_int){
                         ctx->failed=true;
                         return true;
                     }
@@ -521,7 +545,7 @@ namespace PROJECT_NAME{
                 n = self->achar();
             }
             else if(self->expect("0",[](Char c){return !is_digit(c);})){
-                if(ctx->top_no_zero){
+                if(ctx->top_no_zero||ctx->only_int){
                     ctx->failed=true;
                     return true;
                 }
@@ -532,7 +556,7 @@ namespace PROJECT_NAME{
                 n = self->achar();
             }
             else if(n==ctx->dotsymbol){
-                if(ctx->must_sandwichdot){
+                if(ctx->must_sandwichdot||ctx->only_int){
                     ctx->failed=true;
                     return true;
                 }
@@ -556,50 +580,52 @@ namespace PROJECT_NAME{
             must=true;
         }
         bool dot=false;
-        if(n==ctx->dotsymbol){
-            if(ctx->floatf){
-                ctx->failed=true;
-                return true;
-            }
-            ctx->floatf=true;
-            if(ctx->radix==8){
-                if(ctx->top_no_zero){
+        if(!ctx->only_int){
+            if(n==ctx->dotsymbol){
+                if(ctx->floatf){
                     ctx->failed=true;
                     return true;
                 }
-                ctx->radix=10;
+                ctx->floatf=true;
+                if(ctx->radix==8){
+                    if(ctx->top_no_zero){
+                        ctx->failed=true;
+                        return true;
+                    }
+                    ctx->radix=10;
+                }
+                increment();
+                dot=true;
             }
-            increment();
-            dot=true;
-        }
-        if((
-            (ctx->radix==10||ctx->radix==8)&&(n==(Char)'e'||n==(Char)'E')
-           )||(ctx->radix==16&&(n==(Char)'p'||n==(Char)'P'))){
-            if(ctx->expf){
-                ctx->failed=true;
-                return true;
-            }
-            if(ctx->must_sandwichdot&&dot){
-                ctx->failed=true;
-                return true;
-            }
-            ctx->expf=true;
-            ctx->floatf=true;
-            increment();
-            if(n!=(Char)'+'&&n!=(Char)'-'){
-                ctx->failed=true;
-                return true;
-            }
-            ctx->judgenum=is_digit;
-            if(ctx->radix==8){
-                if(ctx->top_no_zero){
+            if((
+                (ctx->radix==10||ctx->radix==8)&&(n==(Char)'e'||n==(Char)'E')
+            )||(ctx->radix==16&&(n==(Char)'p'||n==(Char)'P'))){
+                if(ctx->expf){
                     ctx->failed=true;
                     return true;
                 }
-                ctx->radix=10;
+                if(ctx->must_sandwichdot&&dot){
+                    ctx->failed=true;
+                    return true;
+                }
+                ctx->expf=true;
+                ctx->floatf=true;
+                increment();
+                if(n!=(Char)'+'&&n!=(Char)'-'){
+                    ctx->failed=true;
+                    return true;
+                }
+                ctx->judgenum=is_digit;
+                if(ctx->radix==8){
+                    if(ctx->top_no_zero){
+                        ctx->failed=true;
+                        return true;
+                    }
+                    ctx->radix=10;
+                }
+                increment();
+                must=true;
             }
-            increment();
-            must=true;
         }
         if(!ctx->judgenum(n)){
             if(ctx->radix==8&&is_digit(n)){
@@ -760,4 +786,86 @@ namespace PROJECT_NAME{
     bool parse_float(const Str& str,N& n,bool hex=false){
         return parse_float(str.data(),&str.data()[str.size()],n,hex);
     }
+
+    template<class T,class Buf,class Func>
+    T get_position_translate(size_t pos,Func func,const Buf& buf){
+        constexpr int sof=sizeof(T);
+        if(buf.size()%sof)return T();
+        if(sof*(pos+1)>buf.size()){
+            return T();
+        }
+        char tmp[sof]={0};
+        for(auto i=0;i<sof;i++){
+            tmp[i]=buf[sof*pos+i];
+        }
+        return func(tmp);
+    }
+
+    constexpr size_t OrderedSize(size_t size,size_t order){
+        return size%order?0:size/order;
+    }
+
+    template<class Buf,class T>
+    struct ByteTo{
+    private:
+        static_assert(sizeof(b_char_type<Buf>)==1);
+        Buf buf;
+    public:
+        T operator[](size_t pos)const{
+            return get_position_translate<T>(pos,translate_byte_as_is<T>,buf);
+        }
+
+        size_t size()const{
+            return OrderedSize(buf.size(),sizeof(T));
+        }
+
+        ByteTo(){}
+        ByteTo(const Buf& in):buf(in){}
+        ByteTo(Buf&& in):buf(std::forward<Buf>(in)){}
+    };
+
+    template<class Buf,class T>
+    struct Reverse{
+    private:
+        static_assert(sizeof(b_char_type<Buf>)==1);
+        Buf buf;
+    public:
+        T operator[](size_t pos)const{
+            return get_position_translate<T>(pos,translate_byte_reverse<T>,buf);
+        }
+
+        size_t size()const{
+            return OrderedSize(buf.size(),sizeof(T));
+        }
+
+        Reverse(){}
+        Reverse(const Buf& in):buf(in){}
+        Reverse(Buf&& in):buf(std::forward<Buf>(in)){}
+    };
+
+    template<class Buf,class T>
+    struct Order{
+    private:    
+        static_assert(sizeof(b_char_type<Buf>)==1);
+        Buf buf;
+        bool reverse=false;
+    public:
+         T operator[](size_t pos)const{
+            return reverse?
+            get_position_translate<T>(pos,translate_byte_reverse<T>,buf):
+            get_position_translate<T>(pos,translate_byte_as_is<T>,buf);
+        }
+
+        size_t size()const{
+            return OrderedSize(buf.size(),sizeof(T));
+        }
+
+        Order(){}
+        Order(const Buf& in):buf(in){}
+        Order(Buf&& in):buf(std::forward<Buf>(in)){}
+
+        void set_reverse(bool rev){
+            reverse=rev;
+        }
+    };
 }

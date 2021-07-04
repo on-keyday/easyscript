@@ -1,14 +1,13 @@
-/*
-    Copyright (c) 2021 on-keyday
-    Released under the MIT license
-    https://opensource.org/licenses/mit-license.php
-*/
-
+/*license*/
 #pragma once
 #include"project_name.h"
 #include<cstddef>
 #include<utility>
-//#include<bit>
+
+#if __cplusplus > 201703L
+#include<concepts>
+#endif
+
 namespace PROJECT_NAME{
 
     template<class T>
@@ -47,11 +46,32 @@ namespace PROJECT_NAME{
 #endif
     }
 
-    
     template<class T>
     using remove_cv_ref=std::remove_cv_t<std::remove_reference_t<T>>;
 
+
+#if __cplusplus > 201703L
+    template<class T>
+    concept Is_integral=std::is_integral_v<remove_cv_ref<T>>;
+
     template<class Buf>
+    concept Readable=requires(const Buf& x){
+        {x[0]}->Is_integral;
+        x.size();
+    };
+
+    template<class Buf>
+    concept CharArray=std::is_pointer_v<Buf>&&std::is_integral_v<std::remove_pointer_t<Buf>>;
+/*#define READABLE Readable
+#else
+#define READABLE class*/
+#endif 
+    
+   
+    template<class Buf>
+#if __cplusplus > 201703L
+    requires Readable<Buf>||CharArray<Buf>
+#endif
     struct Reader{
     private:
         Buf buf;
@@ -322,6 +342,10 @@ namespace PROJECT_NAME{
             return seek(pos-1,true);
         }
 
+        bool seekend(){
+            return seek(buf_size(buf));
+        }
+
         Char offset(int ofs) const{
             if(endbuf(buf_size(buf),ofs))return Char();
             return buf[pos+ofs];
@@ -572,4 +596,13 @@ namespace PROJECT_NAME{
 
     template<class Buf>
     using nexpf_t=typename Reader<Buf>::not_expect_default;
+
+    template<class Buf>
+    using b_char_type=typename Reader<Buf>::char_type;
+
+    template<class Buf>
+    constexpr int b_char_size_v=sizeof(b_char_type<Buf>);
+
+    template<class Buf,size_t size>
+    constexpr bool bcsizeeq=size==b_char_size_v<Buf>;
 }

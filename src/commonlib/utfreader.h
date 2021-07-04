@@ -1,7 +1,6 @@
+#pragma once
 #include"utf_helper.h"
 namespace PROJECT_NAME{
-    template<class Buf>
-    using b_char_type=typename Reader<Buf>::char_type;
     
     template<class Buf,int N=sizeof(b_char_type<Buf>)>
     struct ToUTF32;
@@ -25,7 +24,7 @@ namespace PROJECT_NAME{
         }
 
         template<class Func>
-        size_t count(Func func)const{
+        size_t count(Func func,size_t pos=0)const{
             r.seek(0);
             size_t c=0;
             while(!r.ceof()){
@@ -35,7 +34,7 @@ namespace PROJECT_NAME{
                 }
                 c++;
             }
-            r.seek(0);
+            r.seek(pos);
             return c;
         }
 
@@ -91,6 +90,23 @@ namespace PROJECT_NAME{
 
         ToUTF32_impl(Buf&& in):r(std::forward<Buf>(in)){}
         ToUTF32_impl(const Buf& in):r(in){}
+        
+        void copy(const ToUTF32_impl& in){
+            r=in.r;
+            err=in.err;
+            chache=in.chache;
+            prev=in.prev;
+        }
+
+        void move(ToUTF32_impl&& in)noexcept{
+            r=std::move(in.r);
+            err=in.err;
+            in.err=false;
+            chache=in.chache;
+            in.chache=0;
+            prev=in.prev;
+            in.prev=0;
+        }
     };
 
     template<class Buf,class Tmp>
@@ -192,10 +208,11 @@ namespace PROJECT_NAME{
             return r.ref();
         }
 
-        size_t reset(size_t pos=0){
+        template<class Func>
+        size_t reset(Func func,size_t pos=0){
             err=false;
             r.seek(0);
-            auto ret=count();
+            auto ret=count(func);
             r.seek(pos);
             return ret;
         }
@@ -209,6 +226,22 @@ namespace PROJECT_NAME{
         FromUTF32_impl(Buf&& in):r(std::forward<Buf>(in)){}
         FromUTF32_impl(const Buf& in):r(in){}
 
+        void copy(const FromUTF32_impl& in){
+            r=in.r;
+            err=in.err;
+            ofs=in.ofs;
+            prev=in.prev;
+            minbuf=in.minbuf;
+        }
+
+        void move(FromUTF32_impl&& in)noexcept{
+            r=std::move(in.r);
+            err=in.err;
+            in.err=false;
+            prev=in.prev;
+            in.prev=0;
+            minbuf=std::move(in.minbuf);
+        }
         
     };
 
@@ -216,67 +249,7 @@ namespace PROJECT_NAME{
     struct ToUTF32<Buf,1>{
     private:
         ToUTF32_impl<Buf> impl;
-        //static_assert(sizeof(b_char_type<Tmp>)==1,"");
-        /*mutable Reader<Buf> r;
-        mutable bool err=false;
-        mutable size_t prev=0;
-        mutable char32_t chache=0;*/
-        size_t _size=0;
-        /*char32_t get_achar()const{
-            int ierr=0;
-            auto c=utf8toutf32_impl(&r,&ierr);
-            r.increment();
-            if(ierr){
-                err=true;
-            }
-            return c;
-        }
-
-        size_t count()const{
-            size_t c=0;
-            while(!r.ceof()){
-                auto q=get_achar();
-                if(err){
-                    return 0;
-                }
-                c++;
-            }
-            r.seek(0);
-            return c;
-        }
-
-        bool seekminus(long long ofs)const{
-            if(ofs>=0)return false;
-            for(auto i=-1;i>ofs;i--){
-                if(!utf8seek_minus(&r)){
-                    err=true;
-                    return false;
-                }
-            }
-            return true;
-        }
-
-        char32_t get_position(size_t pos)const{
-            if(prev-1==pos){
-                return chache;
-            }
-            if(pos<prev){
-                seekminus(static_cast<long long>(pos-prev-1));
-            }
-            else{
-                for(auto i=prev;i<pos-prev;i++){
-                    get_achar();
-                    if(err)return char32_t();
-                }
-            }
-            chache=get_achar();
-            if(err)return char32_t();
-            prev=pos+1;
-            return chache;
-        }*/
-
-        
-        
+        size_t _size=0;        
     public:
         ToUTF32(){
             _size=impl.count(utf8toutf32_impl<Buf>);
@@ -288,6 +261,17 @@ namespace PROJECT_NAME{
 
         ToUTF32(const Buf& in):impl(in){
             _size=impl.count(utf8toutf32_impl<Buf>);
+        }
+
+        ToUTF32(const ToUTF32& in){
+            _size=in._size;
+            impl.copy(in.impl);
+        }
+
+        ToUTF32(ToUTF32&& in)noexcept{
+            _size=in._size;
+            impl.move(std::forward<ToUTF32_impl<Buf>>(in.impl));
+            in._size=0;
         }
 
         char32_t operator[](size_t s)const{
@@ -305,10 +289,6 @@ namespace PROJECT_NAME{
         }
 
         bool reset(size_t pos=0){
-            /*err=false;
-            _size=count();
-            r.seek(pos);
-            return true;*/
             _size=impl.reset(pos);
             return impl.err;
         }
@@ -316,32 +296,25 @@ namespace PROJECT_NAME{
         Reader<Buf>& base_reader(){
             return impl.base_reader();
         }
+
+        ToUTF32& operator=(const ToUTF32& in){
+            _size=in._size;
+            impl.copy(in.impl);
+            return *this;
+        }
+
+        ToUTF32& operator=(ToUTF32&& in)noexcept{
+            _size=in._size;
+            in._size=0;
+            impl.move(std::forward<ToUTF32_impl>(in.impl));
+            return *this;
+        }
     };
 
     template<class Buf>
     struct ToUTF32<Buf,2>{
         ToUTF32_impl<Buf> impl;
         size_t _size=0;
-
-        /*char32_t get_achar()const{
-            int ierr=0;
-            auto c=utf16toutf32_impl(&r,ierr);
-            if(ierr){
-                err=true;
-            }
-            return 0;
-        }
-
-        bool seekminus(long long ofs)const{
-            if(ofs>=0)return false;
-            for(auto i=-1;i>ofs;i--){
-                if(!utf16seek_minus(&r)){
-                    err=true;
-                    return false;
-                }
-            }
-            return true;
-        }*/
     public:
         ToUTF32(){
             _size=impl.count(utf16toutf32_impl<Buf>);
@@ -350,6 +323,17 @@ namespace PROJECT_NAME{
         ToUTF32(const Buf& in):impl(in){}
         
         ToUTF32(Buf&& in):impl(std::forward<Buf>(in)){}
+
+        ToUTF32(const ToUTF32& in){
+            _size=in._size;
+            impl.copy(in.impl);
+        }
+
+        ToUTF32(ToUTF32&& in)noexcept{
+            _size=in._size;
+            impl.move(std::forward<ToUTF32_impl<Buf>>(in.impl));
+            in._size=0;
+        }
 
         char32_t operator[](size_t s)const{
             if(impl.err)return char32_t();
@@ -377,6 +361,21 @@ namespace PROJECT_NAME{
         Reader<Buf>& base_reader(){
             return impl.base_reader();
         }
+
+        ToUTF32& operator=(const ToUTF32& in){
+            _size=in._size;
+            impl.copy(in.impl);
+            return *this;
+        }
+
+        ToUTF32& operator=(ToUTF32&& in)noexcept{
+            _size=in._size;
+            in._size=0;
+            impl.move(std::forward<ToUTF32_impl<Buf>>(in.impl));
+            return *this;
+        }
+
+        
     };
 
     
@@ -389,86 +388,8 @@ namespace PROJECT_NAME{
     template<class Buf>
     struct ToUTF8<Buf,4>{
     private:
-       /* mutable U8MiniBuffer minbuf;
-        mutable Reader<Buf> r;
-        mutable size_t ofs=0;
-        mutable bool err=false;
-        mutable size_t prev=0;*/
         FromUTF32_impl<Buf,U8MiniBuffer> impl;
         size_t _size=0;
-        /*
-        bool parse()const{
-            minbuf.reset();
-            int ctx=0;
-            int* ctxp=&ctx;
-            utf32toutf8(&r,minbuf,ctxp,false);
-            if(ctx){
-                err=true;
-                return false;
-            }
-            ofs=0;
-            return true;
-        }
-
-        bool increment()const{
-            ofs++;
-            if(ofs>=minbuf.size()){
-                r.increment();
-                if(r.ceof())return false;
-                if(!parse())return false;
-            }
-            return true;
-        }
-
-        bool decrement()const{
-            if(ofs==0){
-                r.decrement();
-                ofs=0;
-                minbuf.reset();
-                parse();
-                if(err)return false;
-                ofs=minbuf.size()-1;
-            }
-            else{
-                ofs--;
-            }
-            return true;
-        }
-
-        size_t count(){
-            size_t c=0;
-            while(!r.ceof()){
-                increment();
-                if(err)return 0;
-                c+=minbuf.size();
-                ofs=minbuf.size();
-            }
-            r.seek(0);
-            ofs=0;
-            minbuf.reset();
-            parse();
-            return c;
-        }
-        
-        unsigned char get_position(size_t pos)const{
-            if(prev==pos){
-                return minbuf[ofs];
-            }
-            if(prev<pos){
-                for(auto i=0;i<pos-prev;i++){
-                    increment();
-                    if(err)return char();
-                }
-            }
-            else{
-                for(auto i=0;i<prev-pos;i++){
-                    decrement();
-                    if(err)return char();
-                }
-            }
-            prev=pos;
-            return minbuf[ofs];
-        }*/
     public:
         ToUTF8(){
             _size=impl.count(utf32toutf8<Buf,U8MiniBuffer>);
@@ -480,6 +401,17 @@ namespace PROJECT_NAME{
 
         ToUTF8(Buf&& in):impl(std::forward<Buf>(in)){
             _size=impl.count(utf32toutf8<Buf,U8MiniBuffer>);
+        }
+
+        ToUTF8(const ToUTF8& in){
+            _size=in._size;
+            impl.copy(in.impl);
+        }
+
+        ToUTF8(ToUTF8&& in)noexcept{
+            _size=in._size;
+            impl.move(std::forward<FromUTF32_impl<Buf,U8MiniBuffer>>(in.impl));
+            in._size=0;
         }
 
         unsigned char operator[](size_t s)const{
@@ -508,6 +440,98 @@ namespace PROJECT_NAME{
             return impl.base_reader();
         }
 
+        bool reset(size_t pos=0){
+            _size=impl.reset(utf32toutf8<Buf,U8MiniBuffer>,pos);
+            return impl.err;
+        }
+
+        ToUTF8& operator=(const ToUTF8& in){
+            _size=in._size;
+            impl.copy(in.impl);
+            return *this;
+        }
+
+        ToUTF8& operator=(ToUTF8&& in)noexcept{
+            _size=in._size;
+            in._size=0;
+            impl.move(std::forward<FromUTF32_impl<Buf,U8MiniBuffer>>(in.impl));
+            return *this;
+        }
+    };
+
+    template<class Buf>
+    struct ToUTF8<Buf,2>{
+    private:
+        FromUTF32_impl<Buf,U8MiniBuffer> impl;
+        size_t _size=0;
+    public:
+        ToUTF8(){
+            _size=impl.count(utf16toutf8<Buf,U8MiniBuffer>);
+        }
+
+        ToUTF8(const Buf& in):impl(in){
+            _size=impl.count(utf16toutf8<Buf,U8MiniBuffer>);
+        }
+
+        ToUTF8(Buf&& in):impl(std::forward<Buf>(in)){
+            _size=impl.count(utf16toutf8<Buf,U8MiniBuffer>);
+        }
+
+        ToUTF8(const ToUTF8& in){
+            _size=in._size;
+            impl.copy(in.impl);
+        }
+
+        ToUTF8(ToUTF8&& in)noexcept{
+            _size=in._size;
+            impl.move(std::forward<FromUTF32_impl<Buf,U8MiniBuffer>>(in.impl));
+            in._size=0;
+        }
+
+
+        unsigned char operator[](size_t s)const{
+            if(impl.err)return char();
+            return s>=_size?char():
+            (char16_t)impl.get_position(utf16toutf8<Buf,U8MiniBuffer>,s);
+        }
+
+        size_t size()const{
+            return _size;
+        }
+
+        size_t ofset_from_head(){
+            return impl.ofset_from_head();
+        }
+
+        size_t offset_to_next(){
+            return impl.offset_to_next();
+        }
+
+        Buf* operator->(){
+            return std::addressof(impl.ref());
+        }
+
+        Reader<Buf>& base_reader(){
+            return impl.base_reader();
+        }
+
+        bool reset(size_t pos=0){
+            _size=impl.reset(utf16toutf8<Buf,U8MiniBuffer>,pos);
+            return impl.err;
+        }
+
+        ToUTF8& operator=(const ToUTF8& in){
+            _size=in._size;
+            impl.copy(in.impl);
+            return *this;
+        }
+
+        ToUTF8& operator=(ToUTF8&& in)noexcept{
+            _size=in._size;
+            in._size=0;
+            impl.move(std::forward<FromUTF32_impl<Buf,U8MiniBuffer>>(in.impl));
+            return *this;
+        }
     };
 
     template<class Buf,int N=sizeof(b_char_type<Buf>)>
@@ -529,6 +553,17 @@ namespace PROJECT_NAME{
 
         ToUTF16(Buf&& in):impl(std::forward<Buf>(in)){
             _size=impl.count(utf32toutf16<Buf,U16MiniBuffer>);
+        }
+
+        ToUTF16(const ToUTF16& in){
+            _size=in._size;
+            impl.copy(in.impl);
+        }
+
+        ToUTF16(ToUTF16&& in)noexcept{
+            _size=in._size;
+            impl.move(std::forward<FromUTF32_impl<Buf,U16MiniBuffer>>(in.impl));
+            in._size=0;
         }
 
         char16_t operator[](size_t s)const{
@@ -556,6 +591,24 @@ namespace PROJECT_NAME{
         Reader<Buf>& base_reader(){
             return impl.base_reader();
         }
+
+        bool reset(size_t pos=0){
+            _size=impl.reset(utf32toutf16<Buf,U16MiniBuffer>,pos);
+            return impl.err;
+        }
+
+        ToUTF16& operator=(const ToUTF16& in){
+            _size=in._size;
+            impl.copy(in.impl);
+            return *this;
+        }
+
+        ToUTF16& operator=(ToUTF16&& in)noexcept{
+            _size=in._size;
+            in._size=0;
+            impl.move(std::forward<FromUTF32_impl<Buf,U16MiniBuffer>>(in.impl));
+            return *this;
+        }
     };
 
     template<class Buf>
@@ -574,6 +627,17 @@ namespace PROJECT_NAME{
 
         ToUTF16(Buf&& in):impl(std::forward<Buf>(in)){
             _size=impl.count(utf8toutf16<Buf,U16MiniBuffer>);
+        }
+
+        ToUTF16(const ToUTF16& in){
+            _size=in._size;
+            impl.copy(in.impl);
+        }
+
+        ToUTF16(ToUTF16&& in)noexcept{
+            _size=in._size;
+            impl.move(std::forward<FromUTF32_impl<Buf,U16MiniBuffer>>(in.impl));
+            in._size=0;
         }
 
         char16_t operator[](size_t s)const{
@@ -601,74 +665,33 @@ namespace PROJECT_NAME{
         Reader<Buf>& base_reader(){
             return impl.base_reader();
         }
+
+        bool reset(size_t pos=0){
+            _size=impl.reset(utf8toutf16<Buf,U16MiniBuffer>,pos);
+            return impl.err;
+        }
+
+        ToUTF16& operator=(const ToUTF16& in){
+            _size=in._size;
+            impl.copy(in.impl);
+            return *this;
+        }
+
+        ToUTF16& operator=(ToUTF16&& in)noexcept{
+            _size=in._size;
+            in._size=0;
+            impl.move(std::forward<FromUTF32_impl<Buf,U16MiniBuffer>>(in.impl));
+            return *this;
+        }
     };
+
 
     template<class Buf>
-    struct ToUTF8<Buf,2>{
-    private:
-        FromUTF32_impl<Buf,U16MiniBuffer> impl;
-        size_t _size=0;
-    public:
-        ToUTF8(){
-            _size=impl.count(utf16toutf8<Buf,U8MiniBuffer>);
-        }
+    using OptUTF8=std::conditional_t<bcsizeeq<Buf,1>,Buf,ToUTF8<Buf>>;
+    
+    template<class Buf>
+    using OptUTF16=std::conditional_t<bcsizeeq<Buf,2>,Buf,ToUTF16<Buf>>;
 
-        ToUTF8(const Buf& in):impl(in){
-            _size=impl.count(utf16toutf8<Buf,U8MiniBuffer>);
-        }
-
-        ToUTF8(Buf&& in):impl(std::forward<Buf>(in)){
-            _size=impl.count(utf16toutf8<Buf,U8MiniBuffer>);
-        }
-
-        char16_t operator[](size_t s)const{
-            if(impl.err)return char();
-            return s>=_size?char():
-            (char16_t)impl.get_position(utf16toutf8<Buf,U8MiniBuffer>,s);
-        }
-
-        size_t size()const{
-            return _size;
-        }
-
-        size_t ofset_from_head(){
-            return impl.ofset_from_head();
-        }
-
-        size_t offset_to_next(){
-            return impl.offset_to_next();
-        }
-
-        Buf* operator->(){
-            return std::addressof(impl.ref());
-        }
-
-        Reader<Buf>& base_reader(){
-            return impl.base_reader();
-        }
-    };
-
-    template<class Buf,class T>
-    struct ByteTo{
-        static_assert(sizeof(b_char_type<Buf>)==1);
-        constexpr int sof=sizeof(T);
-        Buf buf;
-        T operator[](size_t pos)const{
-            if(buf.size()%sof)return T();
-            if(sof*(pos+1)>buf.size()){
-                return T();
-            }
-            char buf[sof]={0};
-            for(auto i=0;i<sof;i++){
-                buf[i]=buf[sof*pos+i];
-            }
-            return translate_byte_as_is<T>(buf);
-        }
-
-        size_t size()const{
-            return buf.size()/sof;
-        }
-
-        ByteTo(){}
-    };
+    template<class Buf>
+    using OptUTF32=std::conditional_t<bcsizeeq<Buf,4>,Buf,ToUTF32<Buf>>;
 }

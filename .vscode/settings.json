@@ -79,6 +79,8 @@
         "stop_token": "cpp",
         "thread": "cpp",
         "chibicc.h": "c",
-        "regex": "cpp"
+        "regex": "cpp",
+        "any": "cpp",
+        "set": "cpp"
     }
 }

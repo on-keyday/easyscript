@@ -1,9 +1,4 @@
-/*
-    Copyright (c) 2021 on-keyday
-    Released under the MIT license
-    https://opensource.org/licenses/mit-license.php
-*/
-
+/*license*/
 #pragma once 
 #include"reader.h"
 #ifdef _WIN32
@@ -33,6 +28,23 @@ namespace PROJECT_NAME{
         void reset(){
             pos=0;
         }
+
+        U8MiniBuffer& operator=(const U8MiniBuffer& in){
+            pos=in.pos;
+            for(auto i=0;i<pos;i++){
+                minbuf[i]=in.minbuf[i];
+            }
+            return *this;
+        }
+
+        U8MiniBuffer& operator=(U8MiniBuffer&& in){
+            pos=in.pos;
+            for(auto i=0;i<pos;i++){
+                minbuf[i]=in.minbuf[i];
+            }
+            in.pos=0;
+            return *this;
+        }
     };
 
     struct U16MiniBuffer{
@@ -56,6 +68,23 @@ namespace PROJECT_NAME{
 
         void reset(){
             pos=0;
+        }
+
+        U16MiniBuffer& operator=(const U16MiniBuffer& in){
+            pos=in.pos;
+            for(auto i=0;i<pos;i++){
+                minbuf[i]=in.minbuf[i];
+            }
+            return *this;
+        }
+
+        U16MiniBuffer& operator=(U16MiniBuffer&& in){
+            pos=in.pos;
+            for(auto i=0;i<pos;i++){
+                minbuf[i]=in.minbuf[i];
+            }
+            in.pos=0;
+            return *this;
         }
     };
     
@@ -404,7 +433,7 @@ namespace PROJECT_NAME{
         return false;
     }
 
-#ifdef _WIN32
+#ifdef _WIN32 /*for windows in Japanese-lang*/
 
     template<class Buf,class Ret>
     bool sjistoutf16(Reader<Buf>* self,Ret& ret,int*& ctx,bool begin){

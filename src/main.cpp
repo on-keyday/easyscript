@@ -198,35 +198,28 @@ Reader<Order<FileMap,char16_t>> test3(){
 }
 
 void test4(){
-    //setlocale(LC_ALL,".UTF-8");
-    //SetConsoleCP(CP_UTF8);
-    /*Reader<std::string> op("84672937");
-    int t=0;
-    op >> t;
-    std::u8string str,inter;
-    std::string in;
-    std::getline(std::cin,in);
-    StrStream(in) >> nativefilter >> u8filter >> igws >> is_c_id_usable<char> >> str >> inter;
-    */
-    CmdlineCtx<std::string,std::string,std::map,std::vector> ctx;
-    ctx.register_paramproc(defcmdlineproc_impl<std::string>);
-    ctx.register_error(
-        [](auto& name,auto in1,auto& in2,auto in3){std::cout << in1 << in2 << in3;});
-    auto testcmd=ctx.register_command("test",[](const auto& ctx,int,int){
-        ctx.log(std::cout,"test called");
-        return 0;
-    });
-    auto forcmd=ctx.register_subcommand(testcmd,"for",/*[](const auto& ctx){
-        ctx.printlog(std::cout,"test for called");
-        ctx.printlog(std::cout,ctx.exists_option("-long"));
-        return 0;
-    }*/nullptr);
-    ctx.register_by_optname(forcmd,
-    {{"-long","l"}});
-    ctx.execute([](auto& input){
-        std::getline(std::cin,input.ref());
-        return true;
-    });
+    Reader<ToUTF8<std::u32string>> str(std::u32string(U"𠮷!太郎"));
+    str.expect(u8"𠮷");
+    str.expect(u8"𠮷");
+    str.seek(0);
+    bool res=str.expect(u8"𠮷");
+    bool res2=str.expect("!");
+    str.decrement();
+    bool res3=str.expect(u8"!太");
+    str.seek(0);
+    bool res4=str.expect(u8"𠮷");
+
+    Reader<ToUTF16<std::u32string>> v(std::u32string(U"𠮷!太郎"));
+    bool ch=v.expect(u"𠮷!太郎");
+    v.seek(0);
+    bool res5=v.expect(u"𠮷");
+    bool res6=v.expect("!");
+    v.decrement();
+    bool res7=v.expect("!");
+    v.seek(0);
+    bool res8=v.expect(u"𠮷");
+
+    
 }
 
 int main(int argc,char** argv){

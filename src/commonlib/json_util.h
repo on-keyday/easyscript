@@ -41,11 +41,13 @@ namespace PROJECT_NAME{
         noendlinetab=tab|afterspace
     };
     
-    auto operator|(JSONFormat l,JSONFormat r){
+    /*auto operator|(JSONFormat l,JSONFormat r){
         using basety=std::underlying_type_t<JSONFormat>;
         return static_cast<JSONFormat>((basety)l|(basety)r);
-    }
+    }*/
     
+    DEFINE_ENUMOP(JSONFormat)
+
     struct EasyStr{
     private:
         char* str=nullptr;
@@ -397,7 +399,7 @@ namespace PROJECT_NAME{
 
         std::string to_string_detail(JSONFormat format,size_t ofs,size_t indent,size_t base_skip) const{
             auto flag=[&format](auto n){
-                return (bool)((unsigned int)format&(unsigned int)n);
+                return any(format&n);
             };
             if(type==JSONType::unset)
                 return "";
@@ -905,7 +907,7 @@ namespace PROJECT_NAME{
         std::string to_string(size_t indent=0,JSONFormat format=JSONFormat::defaultf) const{
             auto ret=to_string_detail(format,1,indent,0);
             auto flag=[&format](auto n){
-                return (bool)((unsigned int)format&(unsigned int)n);
+                return any(format&n);
             };
             if(ret.size()&&flag(JSONFormat::endline))ret+="\n";
             return ret;

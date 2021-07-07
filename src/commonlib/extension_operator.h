@@ -1,6 +1,7 @@
 #pragma once
 #include"basic_helper.h"
 #include"utf_helper.h"
+#include"utfreader.h"
 #include<string>
 #include<type_traits>
 
@@ -23,11 +24,12 @@ namespace PROJECT_NAME{
         if(ctx.failed||buf.size()==0){
             return r;
         }
+        auto ofs=ctx.radix==10?0:ctx.radix==16||ctx.radix==2?2:1;
         if constexpr (std::is_integral_v<T>){
-            parse_int(buf,out,ctx.radix);
+            parse_int(buf.data()+ofs,&buf.data()[buf.size()],out,ctx.radix);
         }
         else if constexpr(std::is_floating_point_v<T>){
-            parse_float(buf,out,ctx.radix==16);
+            parse_float(buf.data()+ofs,&buf.data()[buf.size()],out,ctx.radix==16);
         }
         return r;
     }
@@ -196,9 +198,11 @@ namespace PROJECT_NAME{
 
 #ifdef _WIN32 /*for windows in Japanese-lang*/
     struct CP932Filter_Type{};
+    struct TOCP932Filter_Type{};
     CP932Filter_Type nativefilter(){return CP932Filter_Type();}
+    TOCP932Filter_Type utffilter(){return TOCP932Filter_Type();}
 
-     template<class IStream>
+    template<class IStream>
     auto filter_char_size(IStream&& in,CP932Filter_Type(*)()){
         Reader<std::wstring> r;
         static_assert(sizeof(typename IStream::char_type)==1);
@@ -208,8 +212,20 @@ namespace PROJECT_NAME{
         str.readwhile(r.ref(),sjistoutf16,&ctx);
         return r;
     }
+
+    template<class IStream>
+    auto filter_char_size(IStream&& in,TOCP932Filter_Type(*)()){
+        Reader<std::string> r;
+        static_assert(sizeof(typename IStream::char_type)==2);
+        Reader<std::wstring> str;
+        in >> str.ref();
+        int ctx=0;
+        str.readwhile(r.ref(),utf16tosjis,&ctx);
+        return r;
+    }
 #else
-    U8Filter_Type nativefilter(){return U8Filter_Type();}
+    U16Filter_Type nativefilter(){return U16Filter_Type();}
+    U8Filter_Type utffilter(){return U8Filter_Type();}
 #endif
 
     template<class Char,class Traits,class Filter>
@@ -233,7 +249,7 @@ namespace PROJECT_NAME{
 
         template<class OtherStr,class =std::enable_if_t<!std::is_function_v<OtherStr>,void>>
         StrStream& operator>>(OtherStr& in){
-            s.reserve(std::size(s));
+            in.reserve(std::size(s));
             for(auto& o:s){
                 in.push_back(o);
             }
@@ -269,6 +285,22 @@ namespace PROJECT_NAME{
          ret.ref().reset();
          return ret;
     }
+
+#ifdef _WIN32
+    template<class Buf>
+    decltype(auto) operator>>(Reader<Buf>&& r,TOCP932Filter_Type(*)()){
+        Reader<std::string> ret;
+        StrStream(r.ref()) >> utffilter >> ret.ref();
+        return ret;
+    }
+
+    template<class Buf>
+    decltype(auto) operator>>(Reader<Buf>&& r,CP932Filter_Type(*)()){
+        Reader<std::wstring> ret;
+        StrStream(r.ref()) >> nativefilter >> ret.ref();
+        return ret;
+    }
+#endif
 
     struct Resetpos_Type{};
     

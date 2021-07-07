@@ -295,7 +295,10 @@ bool HTTPClient::method(const char* method,const char* url,const char* body,size
 }
 
 bool HTTPClient::set_requestadder(bool(*add)(void*,std::string&,const HTTPClient*),void* ctx){
-    if(add==request_adder)return true;
+    if(add==request_adder){
+        reqctx=ctx;
+        return true;
+    }
     if(!add){
         request_adder=add;
         return true;

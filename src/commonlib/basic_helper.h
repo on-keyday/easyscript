@@ -11,6 +11,42 @@
 
 namespace PROJECT_NAME{
 
+
+#define DEFINE_ENUMOP(TYPE)\
+    constexpr TYPE operator&(TYPE a,TYPE b){\
+        using basety=std::underlying_type_t<TYPE>;\
+        return static_cast<TYPE>((basety)a & (basety)b);\
+    }\
+    constexpr TYPE operator|(TYPE a,TYPE b){\
+        using basety=std::underlying_type_t<TYPE>;\
+        return static_cast<TYPE>((basety)a | (basety)b);\
+    }\
+    constexpr TYPE operator~(TYPE a){\
+        using basety=std::underlying_type_t<TYPE>;\
+        return static_cast<TYPE>(~(basety)a);\
+    }\
+    constexpr TYPE operator^(TYPE a,TYPE b){\
+        using basety=std::underlying_type_t<TYPE>;\
+        return static_cast<TYPE>((basety)a ^ (basety)b);\
+    }\
+    constexpr TYPE& operator&=(TYPE& a,TYPE b){\
+        a=a&b;\
+        return a;\
+    }\
+    constexpr TYPE& operator|=(TYPE& a,TYPE b){\
+        a=a|b;\
+        return a;\
+    }\
+    constexpr TYPE& operator^=(TYPE& a,TYPE b){\
+        a=a^b;\
+        return a;\
+    }\
+    constexpr bool any(TYPE a){\
+        using basety=std::underlying_type_t<TYPE>;\
+        return static_cast<basety>(a)!=0;\
+    }
+
+
     template<class Buf>
     struct Refer{
     private:

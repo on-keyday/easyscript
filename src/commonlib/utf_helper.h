@@ -32,9 +32,14 @@ namespace PROJECT_NAME{
 
         void reset(){
             pos=0;
+            minbuf[0]=0;
+            minbuf[1]=0;
+            minbuf[2]=0;
+            minbuf[3]=0;
         }
 
         U8MiniBuffer& operator=(const U8MiniBuffer& in){
+            reset();
             pos=in.pos;
             for(auto i=0;i<pos;i++){
                 minbuf[i]=in.minbuf[i];
@@ -43,11 +48,12 @@ namespace PROJECT_NAME{
         }
 
         U8MiniBuffer& operator=(U8MiniBuffer&& in){
+            reset();
             pos=in.pos;
             for(auto i=0;i<pos;i++){
                 minbuf[i]=in.minbuf[i];
             }
-            in.pos=0;
+            in.reset();
             return *this;
         }
     };
@@ -73,9 +79,12 @@ namespace PROJECT_NAME{
 
         void reset(){
             pos=0;
+            minbuf[0]=0;
+            minbuf[1]=0;
         }
 
         U16MiniBuffer& operator=(const U16MiniBuffer& in){
+            reset();
             pos=in.pos;
             for(auto i=0;i<pos;i++){
                 minbuf[i]=in.minbuf[i];
@@ -84,11 +93,12 @@ namespace PROJECT_NAME{
         }
 
         U16MiniBuffer& operator=(U16MiniBuffer&& in){
+            reset();
             pos=in.pos;
             for(auto i=0;i<pos;i++){
                 minbuf[i]=in.minbuf[i];
             }
-            in.pos=0;
+            in.reset();
             return *this;
         }
     };
@@ -303,7 +313,7 @@ namespace PROJECT_NAME{
         else if(C<0x10000){
             push(3);
         }
-        else if(C<110000){
+        else if(C<0x110000){
             push(4);
         }
         else{
@@ -381,7 +391,7 @@ namespace PROJECT_NAME{
             *ctx=1;
             return true;
         }
-        if(C<0x100000){
+        if(C<0x10000){
             ret.push_back((char16_t)C);
         }
         else{
@@ -472,6 +482,42 @@ namespace PROJECT_NAME{
             res=MultiByteToWideChar(932,MB_PRECOMPOSED,(char*)buf,2,result,sizeof(result));
             if(res==0){
                 *ctx=2;
+                return true;
+            }
+        }
+        for(auto i=0;i<res;i++){
+            ret.push_back(result[i]);
+        }
+        return false;
+    }
+
+    template<class Buf,class Ret>
+    bool utf16tosjis(Reader<Buf>* self,Ret& ret,int*& ctx,bool begin){
+        static_assert(sizeof(typename Reader<Buf>::char_type)==2);
+        static_assert(sizeof(ret[0])==1);
+        if(begin){
+            if(!ctx)return false;
+            return true;
+        }
+        if(!self)return true;
+        wchar_t C=self->achar();
+        char result[]={0,0,0};
+        int res=0;
+        if(is_utf16_surrogate_high(C)){
+            self->increment();
+            wchar_t S=self->achar();
+            wchar_t buf[]={C,S};
+            res=WideCharToMultiByte(932,0,buf,2,result,sizeof(result),NULL,NULL);
+            if(res==0){
+                *ctx=1;
+                return true;
+            }
+        }
+        else{
+            wchar_t buf[]={C};
+            res=WideCharToMultiByte(932,0,buf,1,result,sizeof(result),NULL,NULL);
+            if(res==0){
+                *ctx=1;
                 return true;
             }
         }

@@ -11,24 +11,8 @@ namespace PROJECT_NAME{
         none=0,
         only_one=0x1,
         hidden_from_child=0x2,
+        effect_to_parent=0x4,
     };
-
-#define DEFINE_ENUMOP(TYPE)\
-    TYPE operator&(TYPE a,TYPE b){\
-        using basety=std::underlying_type_t<TYPE>;\
-        return static_cast<TYPE>((basety)a & (basety)b);\
-    }\
-    TYPE operator|(TYPE a,TYPE b){\
-        using basety=std::underlying_type_t<TYPE>;\
-        return static_cast<TYPE>((basety)a | (basety)b);\
-    }\
-    TYPE operator~(TYPE a){\
-        using basety=std::underlying_type_t<TYPE>;\
-        return static_cast<TYPE>(~(basety)a);\
-    }\
-    bool any(TYPE a){\
-        return a!=TYPE::none;\
-    }
 
     DEFINE_ENUMOP(OptFlag)
 
@@ -56,6 +40,16 @@ namespace PROJECT_NAME{
 
     DEFINE_ENUMOP(LogFlag);
 
+    enum class CmdFlag{
+        none=0,
+        invoke_parent=0x1,
+        use_parentopt=0x2,
+        take_over_prev_run=0x4,
+        no_option=0x8,
+    };
+
+    DEFINE_ENUMOP(CmdFlag)
+
     template<class Buf,class Str,template<class ...>class Map,template<class ...>class Vec,class User>
     struct ArgCtx{
         friend CommandCtx<Buf,Str,Map,Vec,User>;
@@ -67,6 +61,7 @@ namespace PROJECT_NAME{
         using map_type=Map<Key,Value>;
         using cmdline_type=CmdlineCtx<Buf,Str,Map,Vec,User>;
         using command_type=CommandCtx<Buf,Str,Map,Vec,User>;
+        using arg_option_maptype=map_type<string_type,vec_type<string_type>>;
         //string_type cmdname;
     private:
         vec_type<string_type> arg;
@@ -78,11 +73,22 @@ namespace PROJECT_NAME{
     public:
         const vec_type<string_type>* exists_option(const string_type& optname,bool all=false)const{
             const ArgCtx* c=this; 
+            bool on_parent=false;
             do{
+                if(on_parent){
+                    auto opt=c->get_cmdline()->get_option(c->basectx,optname);
+                    if(opt&&any(opt->flag&OptFlag::hidden_from_child)){
+                        return nullptr;
+                    }
+                }
                 if(c->options.count(optname)){
                     return std::addressof(c->options.at(optname));
                 }
+                if(!any(c->basectx->flag&CmdFlag::use_parentopt)){
+                    break;
+                }
                 c=c->parent;
+                on_parent=true;
             }while(all&&c);
             return nullptr;
         }
@@ -95,6 +101,24 @@ namespace PROJECT_NAME{
                 return true;
             }
             return false;
+        }
+
+        vec_type<string_type> get_alloptarg(const string_type& optname)const{
+            const ArgCtx* c=this;
+            vec_type<string_type> ret;
+            do{
+                if(auto argp=c->exists_option(optname)){
+                    auto arg=(*argp);
+                    for(auto& i:arg){
+                        ret.push_back(i);
+                    }
+                }
+                if(!any(c->basectx->flag&CmdFlag::use_parentopt)){
+                    break;
+                }
+                c=c->parent;
+            }while(c);
+            return ret;
         }
 
         bool cmpname(const string_type& str)const{
@@ -138,6 +162,10 @@ namespace PROJECT_NAME{
             return basectx;
         }
 
+        string_type get_command_name()const{
+            return basectx->cmdname;
+        }
+
         void set_logmode(LogFlag flag){
             logmode=flag;
         }
@@ -163,7 +191,7 @@ namespace PROJECT_NAME{
                 if(!ctx->basectx)return;
                 ctx->print_program_name(obj);
             }
-            obj << ctx->cmdname;
+            obj << ctx->cmdname.c_str();
             obj << ":";
             return;
         }
@@ -176,13 +204,7 @@ namespace PROJECT_NAME{
         }        
     };
 
-    enum class CmdFlag{
-        none=0,
-        invoke_parent=0x1,
-        use_parentopt=0x2,
-    };
-
-    DEFINE_ENUMOP(CmdFlag)
+    
 
     template<class C>
     struct ArgVWrapper{
@@ -224,6 +246,14 @@ namespace PROJECT_NAME{
         }
     };
 
+    enum class OptCbFlag{
+        none=0,
+        failed=0,
+        redirect=0x1,
+        succeed=0x2,
+    };
+
+    DEFINE_ENUMOP(OptCbFlag);
 
     template<class Buf,class Str,template<class ...>class Map,template<class ...>class Vec,class User>
     struct CommandCtx{
@@ -236,11 +266,17 @@ namespace PROJECT_NAME{
         using cmdline_type=CmdlineCtx<Buf,Str,Map,Vec,User>;
         //using args_type=Args<string_type>;
         using param_callback=void(*)(string_type&);
-        using param_self_callback=bool(*)(reader_type&,CommandCtx&,arg_type&);
+        using param_self_callback=bool(*)(reader_type&,string_type&);
         using command_callback=int(*)(const arg_type&,int prev,int pos);
+
         template<class Key,class Value>
         using map_type=Map<Key,Value>;
         
+        using option_maptype=map_type<string_type,std::shared_ptr<OptionInfo<string_type>>>;
+        using arg_option_maptype=typename arg_type::arg_option_maptype;
+
+        using option_callback=OptCbFlag(*)(reader_type& ,string_type&,const option_maptype&,arg_option_maptype&);
+
         cmdline_type* basectx=nullptr;
 
         CommandCtx* parent=nullptr;
@@ -249,7 +285,9 @@ namespace PROJECT_NAME{
         param_callback param_proc=nullptr;
         param_self_callback self_proc=nullptr;
         command_callback command_proc=nullptr;
-        map_type<string_type,std::shared_ptr<OptionInfo<string_type>>> options;
+        command_callback prev_run_proc=nullptr;
+        option_callback option_proc=nullptr;
+        option_maptype options;
         map_type<string_type,CommandCtx> subcommands;
         //User user=User();
         //bool invoke_parent=false;
@@ -260,7 +298,7 @@ namespace PROJECT_NAME{
         void print_program_name(Obj& obj)const{
             if(!basectx)return;
             if(basectx->program_name.size()){
-                obj << basectx->program_name;
+                obj << basectx->program_name.c_str();
                 obj << ":";
             }
         }
@@ -293,6 +331,8 @@ namespace PROJECT_NAME{
         using input_func=bool(*)(reader_type&);
         using command_callback=typename command_type::command_callback;
         using param_self_callback=typename command_type::param_self_callback;
+        using option_callback=typename command_type::option_callback;
+
         
         using error_callback=void(*)(const string_type&,const char*,const string_type&,const char*);
 
@@ -307,7 +347,9 @@ namespace PROJECT_NAME{
         
         error_callback errcb=nullptr;
 
-        vec_type<command_callback> rootcb;
+        vec_type<command_callback> rootcb_after;
+
+        vec_type<command_callback> rootcb_prev;
 
         map_type<string_type,std::shared_ptr<OptionInfo<string_type>>> rootopt;
 
@@ -330,7 +372,18 @@ namespace PROJECT_NAME{
         }
 
         bool get_a_param(string_type& arg,command_type* ctx=nullptr){
-            if(!get_a_line(r,arg))return false;
+            if(ctx&&ctx->self_proc){
+                if(!ctx->self_proc(r,arg)){
+                    error("user defined param callback failed");
+                    return false;
+                }
+            }
+            else{
+                if(!get_a_line(r,arg)){
+                    error("get param faild");
+                    return false;
+                }
+            }
             for(command_type* c=ctx;c;c=c->parent){
                 if(c->param_proc){
                     c->param_proc(arg);
@@ -343,41 +396,50 @@ namespace PROJECT_NAME{
             return true;
         }
 
-        bool parse_a_option(const string_type& str,command_type& ctx,arg_type& out){
+        bool parse_a_option(const string_type& str,command_type& ctx,arg_type& out,bool* recover=nullptr){
             std::shared_ptr<OptionInfo<string_type>> opt;
             bool ok=false;
             bool on_parent=false;
             for(command_type* c=&ctx;c;c=c->parent){
                 if(c->options.count(str)){
                     decltype(opt)& ref=c->options[str];
-                    if(!on_parent||any(ref->flag&~OptFlag::hidden_from_child)){
+                    if(!on_parent||!any(ref->flag&OptFlag::hidden_from_child)){
                         opt=ref;
                         ok=true;
                         break;
                     }
-                    
                 }
                 if(any(c->flag&CmdFlag::use_parentopt)){
-                    break;
+                    on_parent=true;
+                    continue;
                 }
-                on_parent=true;
             }
             if(!ok){
                 if(rootopt.count(str)){
                     opt=rootopt[str];
                 }
                 else{
-                    error("unknown option '",str,"'");
+                    if(!recover){
+                        error("unknown option '",str,"'");
+                    }
+                    else{
+                        *recover=true;
+                    }
                     return false;
                 }
             }
             if(any(opt->flag&OptFlag::only_one)){
-                if(out.options.count(opt->name)){
-                    error("option ",str," is already set");
-                    return false;
-                }
+                auto p=&out;
+                do{
+                    if(p->options.count(opt->name)){
+                        error("option ",str," is already set");
+                        return false;
+                    }
+                    p=p->parent;
+                }while(any(opt->flag&OptFlag::effect_to_parent)&&p);
+                
             }
-            vec_type<string_type> optarg;
+            vec_type<string_type>& optarg=out.options[opt->name];
             size_t count=0;
             while(count<opt->argcount){
                 auto prevpos=r.readpos();
@@ -391,13 +453,34 @@ namespace PROJECT_NAME{
                     break;
                 }
                 optarg.push_back(std::move(arg));
+                count++;
             }
-            out.options[opt->name]=std::move(optarg);
             return true;
         }
 
-        bool option_parse(const string_type& str,command_type& ctx,arg_type& out){
+        bool option_parse(string_type& str,command_type& ctx,arg_type& out){
+            if(ctx.option_proc){
+                auto res=ctx.option_proc(r,str,ctx.options,out.options);
+                if(!any(res)){
+                    error("user defined option callback failed");
+                    return false;
+                }
+                if(any(res&OptCbFlag::succeed)){
+                    return true;
+                }
+            }
+            if(!str.size()){
+                error("not option value");
+                return false;
+            }
             if(str[0]=='-')return parse_a_option(str,ctx,out);
+            bool recov=false;
+            if(parse_a_option(str,ctx,out,&recov)){
+                return true;
+            }
+            if(!recov){
+                return false;
+            }
             for(auto& c:str){
                 if(!parse_a_option(string_type(1,c),ctx,out))return false;
             }
@@ -411,20 +494,20 @@ namespace PROJECT_NAME{
                     error("param get failed");
                     return false;
                 }
-                if(str[0]=='-'){
-                    str.erase(0,1);
-                    if(!option_parse(str,ctx,base))return false;
-                }
-                else if(ctx.subcommands.count(str)){
+                if(ctx.subcommands.count(str)){
                     command_type& sub=ctx.subcommands[str];
                     base.child.reset(new arg_type());
                     base.child->parent=&base;
                     base.child->logmode=base.logmode;
                     return parse_by_context(sub,*base.child,fin);
                 }
+                else if(!any(ctx.flag&CmdFlag::no_option)&&str[0]=='-'){
+                    str.erase(0,1);
+                    if(!option_parse(str,ctx,base))return false;
+                }
                 else{
                     base.arg.push_back(str);
-                }
+                }   
             }
             fin=&base;
             return true;
@@ -432,13 +515,13 @@ namespace PROJECT_NAME{
 
         bool parse_by_context(command_type& ctx,arg_type& base,arg_type*& fin){
             base.basectx=&ctx;
-            if(ctx.self_proc){
+            /*if(ctx.self_proc){
                 fin=&base;
                 return ctx.self_proc(r,ctx,base);
             }
-            else{
+            else{*/
                 return parse_default(ctx,base,fin);
-            }
+            //}
         }
 
 
@@ -456,6 +539,7 @@ namespace PROJECT_NAME{
 
         bool input(){
             //r=reader_type(string_type(in),ignore_space);
+            r.set_ignore(ignore_space);
             return (bool)r.readable();
         }
 
@@ -467,8 +551,19 @@ namespace PROJECT_NAME{
             int res=-1;
             int pos=0;
             bool called=false;
+            for(auto cb:rootcb_prev){
+                cb(arg,res,-1);
+            }
             for(command_type* c=arg.basectx;c;c=c->parent){
                 if(c->command_proc){
+                    if(!called&&c->prev_run_proc){
+                        //prev_run_proc will be called 
+                        //when any command_proc run and registered it.
+                        //this is supposed to use at common initialize
+                        //operation for the command tree  
+                        //this is able to do pseudo overload by using CmdFlag::take_over_prev_run
+                        c->prev_run_proc(arg,res,-1);
+                    }
                     res=c->command_proc(arg,res,pos);
                     called=true;
                     pos++;
@@ -482,7 +577,7 @@ namespace PROJECT_NAME{
                 error("any action is not registered");
                 return -1;
             }
-            for(auto cb:rootcb){
+            for(auto cb:rootcb_after){
                 cb(arg,res,pos);
                 pos++;
             }
@@ -490,8 +585,7 @@ namespace PROJECT_NAME{
         }
 
         command_type* register_command_impl(command_type& cmd,const string_type& name,
-        command_callback proc,const string_type& help=string_type(),
-        CmdFlag flag=CmdFlag::none){
+        command_callback proc,const string_type& help,CmdFlag flag,command_callback prev_run){
             cmd.cmdname=name;
             cmd.command_proc=proc;
             cmd.help_str=help;
@@ -499,6 +593,7 @@ namespace PROJECT_NAME{
             //cmd.use_parentopt=use_parentopt;
             //cmd.invoke_parent=invoke_parent;
             cmd.flag=flag;
+            cmd.prev_run_proc=prev_run;
             return &cmd;
         }
 
@@ -521,22 +616,26 @@ namespace PROJECT_NAME{
             errcb=cb;
         }
 
-        [[nodiscard]]
+        //[[nodiscard]]
         command_type* register_command(const string_type& name,command_callback proc,
-        const string_type& help=string_type()){
+        const string_type& help=string_type(),command_callback prev_run=nullptr){
             if(!proc||_command.count(name))return nullptr;
             command_type& cmd=_command[name];
-            return register_command_impl(cmd,name,proc,help,CmdFlag::none);
+            return register_command_impl(cmd,name,proc,help,CmdFlag::none,prev_run);
         }
 
-        [[nodiscard]]
+        //[[nodiscard]]
         command_type* register_subcommand(command_type* cmd,const string_type& name,
         command_callback proc,const string_type& help=string_type(),
-        CmdFlag flag=CmdFlag::none){
+        CmdFlag flag=CmdFlag::none,command_callback prev_run=nullptr){
             if(!cmd)return nullptr;
             if(cmd->subcommands.count(name))return nullptr;
             auto& sub=cmd->subcommands[name];
-            return register_command_impl(sub,name,proc,help,flag);
+            sub.parent=cmd;
+            if(!prev_run&&any(flag&CmdFlag::take_over_prev_run)){
+                prev_run=cmd->prev_run_proc;
+            }
+            return register_command_impl(sub,name,proc,help,flag,prev_run);
         }
 
         [[nodiscard]]
@@ -558,9 +657,24 @@ namespace PROJECT_NAME{
         }
 
 
-        bool register_root_callback(command_callback proc){
+        bool register_root_callback(command_callback proc,bool after=false){
             if(!proc)return false;
-            rootcb.push_back(proc);
+            if(after){
+                rootcb_after.push_back(proc);
+            }
+            else{
+                rootcb_prev.push_back(proc);
+            }
+            return true;
+        }
+
+        bool clear_root_callback(bool after=false){
+            if(after){
+                rootcb_after.resize(0);
+            }
+            else{
+                rootcb_prev.resize(0);
+            }
             return true;
         }
 
@@ -597,6 +711,23 @@ namespace PROJECT_NAME{
                 return set_info(cmd->options[name]);
             }
         }
+
+        std::shared_ptr<OptionInfo<string_type>> get_option(command_type* cmd,const string_type& name){
+            if(!cmd){
+                if(!rootopt.count(name))return nullptr;
+                return rootopt[name];
+            }
+            if(!cmd->options.count(name))return nullptr;
+            return cmd->options[name];
+        }
+
+        bool remove_option(command_type* cmd,const string_type& name){
+            if(!cmd){
+                return (bool)rootopt.erase(name);
+            }
+            return (bool)cmd->options.erase(name);
+        }
+
 
         bool register_option_alias(command_type* cmd,std::shared_ptr<OptionInfo<string_type>>& info,const string_type& name){
             if(!cmd){
@@ -663,4 +794,5 @@ namespace PROJECT_NAME{
 
     template<class C,class Str,template<class ...>class Map,template<class ...>class Vec,class User=void*>
     using ArgVCtx=CmdlineCtx<ArgVWrapper<C>,Str,Map,Vec,User>;
+
 }

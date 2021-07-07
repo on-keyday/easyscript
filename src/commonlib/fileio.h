@@ -485,4 +485,23 @@ namespace PROJECT_NAME{
 #ifdef _fileno
 #undef _fileno
 #endif
+
+#ifdef _WIN32
+
+    struct ConsoleWrapper{
+        struct Handle{
+            HANDLE h=INVALID_HANDLE_VALUE;
+            bool relfile=false;
+        };
+        Handle handles[3];
+        bool write(int num,const wchar_t* buf,DWORD size){
+            DWORD written=0;
+            return (bool)WriteConsoleW(handles[num].h,buf,size,&written,NULL);
+        }
+
+        bool read(int num,std::wstring& buf){
+            return false;
+        }
+    };
+#endif
 }

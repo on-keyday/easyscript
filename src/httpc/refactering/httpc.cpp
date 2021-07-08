@@ -85,7 +85,8 @@ int sending_method(const Arg<Buf>& arg,Func func,bool must){
         return -3;
     }
     if(arg.exists_option("-payload-file")){
-        auto file=(StrStream(payload)>>u16filter>>utffilter).ref();
+        string file;
+        StrStream(payload)>>u16filter>>utffilter>>file;
         Reader<FileMap> r(file.c_str());
         if(!r.ref().size()){
             arg.log(errorlog,"error:file '",file,"' is not opend");

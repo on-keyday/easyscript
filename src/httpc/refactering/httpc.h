@@ -1,8 +1,13 @@
 #pragma once
+#ifdef _WIN32
 #ifndef DLL_EXPORT
 #define DLL_EXPORT __declspec(dllimport) 
 #endif
 #define STDCALL __stdcall
+#else
+#define DLL_EXPORT
+#define STDCALL
+#endif
 
 #ifdef __cplusplus
 extern "C"{

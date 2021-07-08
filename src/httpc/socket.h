@@ -17,6 +17,7 @@
 #include<WinSock2.h>
 #include<WS2tcpip.h>
 #else
+#include <arpa/inet.h>
 #include<unistd.h>
 #include<sys/ioctl.h>
 #include<sys/stat.h>

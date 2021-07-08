@@ -1,8 +1,12 @@
+#ifdef _WIN32
 #define DLL_EXPORT __declspec(dllexport)
+#endif
 #include"httpc.h"
 #include"../http1.h"
-#include<cmdline_ctx.h>
+#ifdef _WIN32
 #include<windows.h>
+#endif
+#include<cmdline_ctx.h>
 #include<iostream>
 #include<vector>
 #include<map>

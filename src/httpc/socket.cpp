@@ -47,11 +47,13 @@ bool ClientSocket::connect(unsigned short port,bool nodelay){
         ::closesocket(sock);
     }
     if(isconnected()&&nodelay){
+#ifdef _WIN32
         char opt=nodelay;
         if(setsockopt(sock,IPPROTO_TCP,TCP_NODELAY,&opt,1)<0){
             disconeect();
             return false;
         }
+#endif            
     }
     return isconnected();
 }

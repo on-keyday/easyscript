@@ -356,8 +356,12 @@ int http(const Arg<Buf>& arg,int prev,int pos){
         anyshown=true;
     }
     if(arg.get_optarg(opt,"-output-file",0,true)){
+#ifdef _WIN32
         std::wstring path;
         StrStream(opt) >> u16filter >> path;
+#else
+        std::string path=std::move(opt);
+#endif
         std::ofstream ofs(path.c_str(),std::ios_base::binary);
         if(ofs.is_open()){
             ofs<<ctx->client->body();

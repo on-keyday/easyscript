@@ -336,7 +336,7 @@ namespace PROJECT_NAME{
                     return parse_fl();
                 }
                 else{
-                    unsigned long long n=0;
+                    uint64_t n=0;
                     if(parse_ull(num,n)){
                         /*auto res=std::from_chars(be,en,n);
                         if(res.ec==std::errc{}){*/

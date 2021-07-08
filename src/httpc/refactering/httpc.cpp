@@ -313,7 +313,11 @@ int invoke_interactive(const Arg<Buf>& arg,Context* ctx){
     user.client->set_requestadder(custom_header,&user);
     auto httpc=SetCommand(ws);
     return ws.execute_with_context(httpc,[](auto& in){
+#ifdef _WIN32
         in.ref()=std::wstring(L"-i");
+#else
+        in.ref()=std::string("-i");
+#endif
         return true;
     });
 }

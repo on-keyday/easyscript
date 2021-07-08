@@ -76,7 +76,11 @@ int sending_method(const Arg<Buf>& arg,Func func,bool must){
         arg.log(errorlog,"error:set data payload by option --data-payload or -d");
         return -3;
     }
-    if(payload.size()&&arg.exists_option("-payload-file")){
+    if(must&&!payload.size()){
+        arg.log(errorlog,"error:0 size payload not allowed");
+        return -3;
+    }
+    if(arg.exists_option("-payload-file")){
         auto file=(StrStream(payload)>>u16filter>>utffilter).ref();
         Reader<FileMap> r(file.c_str());
         if(!r.ref().size()){
@@ -314,14 +318,19 @@ int http(const Arg<Buf>& arg,int prev,int pos){
         if(!ctx->on_interactive&&arg.exists_option("-interactive")){
             return invoke_interactive<Buf>(arg,ctx);
         }
-        std::string ws;
-        if(arg.get_arg(0,ws)){
-            arg.log(errorlog,"unknown command:",(StrStream(ws)>>u16filter>>utffilter).ref());
+        if(ctx->on_interactive){
+            std::string ws;
+            if(arg.get_arg(0,ws)){
+                arg.log(errorlog,"unknown command:",(StrStream(ws)>>u16filter>>utffilter).ref());
+            }
+            else{
+                arg.log(errorlog,"input method!");
+            }
+            return -1;
         }
         else{
-            arg.log(errorlog,"input method!");
+            prev=get<Buf>(arg,0,0);
         }
-        return -1;
     }
     if(ctx->exit)return prev;
     if(prev==-2){
@@ -344,7 +353,7 @@ int http(const Arg<Buf>& arg,int prev,int pos){
     if(arg.get_optarg(opt,"-output-file",0,true)){
         std::wstring path;
         StrStream(opt) >> u16filter >> path;
-        std::ofstream ofs(path,std::ios_base::binary);
+        std::ofstream ofs(path.c_str(),std::ios_base::binary);
         if(ofs.is_open()){
             ofs<<ctx->client->body();
             arg.log(logger,"content was saved to ",opt.c_str());

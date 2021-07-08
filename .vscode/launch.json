@@ -6,12 +6,12 @@
             "type": "cppvsdbg",
             "request": "launch",
             "program": "${workspaceFolder}/cl_build/built/built/httpc.exe",
-            "args": ["-ic","D:\\CommonLib\\netsoft\\cacert.pem"],
+            "args": ["-cs","D:\\CommonLib\\netsoft\\cacert.pem","https://google.com"],
             "stopAtEntry": false,
             "cwd": "${workspaceFolder}/cl_build/built/built",
             "environment": [],
             "preLaunchTask": "build_cpp",
-            "console": "externalTerminal"
+            "console":"newExternalWindow"
         },
         {
             "name": "(clang_build)",
@@ -23,7 +23,7 @@
             "cwd": "${workspaceFolder}/clang_build/built/built",
             "environment": [],
             "preLaunchTask": "build_cpp",
-            "console": "externalTerminal"
+            "console": "newExternalWindow"
         },
         {
             "name": "(gcc_build)",
@@ -35,7 +35,7 @@
             "cwd": "${workspaceFolder}/gcc_build/built/built",
             "environment": [],
             "preLaunchTask": "build_cpp",
-            "console": "externalTerminal"
+            "console": "newExternalWindow"
         }
     ]
 }

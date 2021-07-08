@@ -16,7 +16,7 @@ target_link_libraries(httpc netclient)
 if(WIN32)
 target_link_libraries(netclient libcrypto libssl ws2_32)
 else()
-target_link_libraries(netclient /lib/x86_64-linux-gnu/libssl.so /lib/x86_64-linux-gnu/libcrypto.so)
+target_link_libraries(netclient libssl.so libcrypto.so)
 endif()
 
 include_directories("commonlib")

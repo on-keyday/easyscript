@@ -197,8 +197,11 @@ int interactive(const Arg<Buf>& arg,Context* ctx){
         res=cmdline->execute_with_context(cmd,[](auto& in){
             std::string ws;
             std::getline(std::cin,ws);
-            std::wstring tmp;
+#ifdef _WIN32
             in=Reader<Buf>((StrStream(ws)>>nativefilter).ref());
+#else
+            in=Reader<Buf>(std::move(ws));
+#endif
             return true;
         },LogFlag::none);
     }
@@ -298,7 +301,11 @@ Cmd<Buf>* SetCommand(CmdLine<Buf>& ctx){
 
 template<class Buf>
 int invoke_interactive(const Arg<Buf>& arg,Context* ctx){
+#ifdef _WIN32
     CmdLine<ToUTF8<std::wstring>> ws;
+#else
+    CmdLine<std::string> ws;
+#endif
     ws.register_paramproc(defcmdlineproc_impl);
     Context& user=ws.get_user();
     user.client=ctx->client;
@@ -311,10 +318,17 @@ int invoke_interactive(const Arg<Buf>& arg,Context* ctx){
     });
 }
 
+#ifdef _WIN32
 template<>
 int invoke_interactive<ToUTF8<std::wstring>>(const Arg<ToUTF8<std::wstring>>& arg,Context* ctx){
     return interactive<ToUTF8<std::wstring>>(arg,ctx);
 }
+#else
+template<>
+int invoke_interactive<std::string>(const Arg<std::string>& arg,Context* ctx){
+    return interactive<std::string>(arg,ctx);
+}
+#endif
 
 template<class Buf>
 int http(const Arg<Buf>& arg,int prev,int pos){

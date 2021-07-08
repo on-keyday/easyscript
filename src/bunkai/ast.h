@@ -263,7 +263,7 @@ namespace ast{
                 PROJECT_NAME::NumberContext<char> c;
                 r.readwhile(tok->str,PROJECT_NAME::number,&c);
                 if(c.failed)return error("number:invalid number");
-                NumberSuffix(tok,c.floatf,c.radix);
+                NumberSuffix(tok,any(c.flag&PROJECT_NAME::NumberFlag::floatf),c.radix);
                 r.set_ignore(tmp);
                 return true;
             }

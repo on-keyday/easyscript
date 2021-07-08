@@ -38,8 +38,10 @@ using Cmd=typename CmdLine<Buf>::command_type;
 auto& logger=std::cout;
 auto& errorlog=std::cerr;
 
-template<class Buf>
-int get(const Arg<Buf>& arg,int,int){
+
+
+template<class Buf,class Func>
+int getting_method(const Arg<Buf>& arg,Func func){
     Context* ctx=arg.get_user(true);
     string url;
     if(!arg.get_arg(0,url)){
@@ -47,8 +49,18 @@ int get(const Arg<Buf>& arg,int,int){
         return -1;
     }
     ctx->url=url;
-    if(!ctx->client->get(url.c_str()))return -2;
+    if(!func(ctx->client,url.c_str()))return -2;
     return 0;
+}
+
+template<class Buf>
+int get(const Arg<Buf>& arg,int,int){
+    return getting_method<Buf>(arg,[](HTTPClient* client,auto url){return client->get(url);});
+}
+
+template<class Buf>
+int head(const Arg<Buf>& arg,int,int){
+    return getting_method<Buf>(arg,[](HTTPClient* client,auto url){return client->head(url);});
 }
 
 template<class Buf,class Func>
@@ -129,9 +141,17 @@ void PrintSummay(const Arg<Buf>& arg,Context* ctx){
     else{
         arg.log(logger,"no content");
     }
-    msg("server");
-    msg("content-type");
-    msg("accept");
+    if(!arg.exists_option("-show-all-header")){
+        msg("server");
+        msg("content-type");
+        msg("accept");
+        msg("location");
+    }
+    else{
+        for(auto& h:ctx->client->header()){
+            arg.log(logger,h.first,":",h.second);
+        }
+    }
 }
 
 template<class Buf>
@@ -173,6 +193,7 @@ int interactive(const Arg<Buf>& arg,Context* ctx){
             return true;
         },LogFlag::none);
     }
+    logger << "Bye\n";
     return res;
 }
 
@@ -222,16 +243,28 @@ int common_option_get(const Arg<Buf>& arg,int prev,int pos){
     if(arg.get_optarg(cacert,"-cacert-file",0,true)){
         ctx->client->set_cacert(cacert);
     }
+    if(arg.exists_option("-auto-redirect")){
+        ctx->client->set_auto_redirect(true);
+    }
+    else{
+        ctx->client->set_auto_redirect(false);
+    }
     /*else{
         ctx->client->set_cacert("./cacert.pem");
     }*/
     return 0;
 }
 
+void simple_err(ErrorKind kind,const string&,const char* err1,const string& err2,const char* err3){
+    if(kind==ErrorKind::input)return;
+    errorlog << err1 << err2 << err3 << "\n";
+}
+
 template<class Buf>
 Cmd<Buf>* SetCommand(CmdLine<Buf>& ctx){
+    ctx.register_error(simple_err);
     auto httpc=ctx.register_command("httpc",http<Buf>,"",common_option_get<Buf>);
-    constexpr OptFlag optf=OptFlag::only_one|OptFlag::effect_to_parent;
+    constexpr auto optf=OptFlag::only_one|OptFlag::effect_to_parent;
     ctx.register_by_optname(httpc,{
         {"-output-file","o",true,optf,"set output file"},
         {"-summary","s",false,optf,"summarize http header"},
@@ -241,9 +274,12 @@ Cmd<Buf>* SetCommand(CmdLine<Buf>& ctx){
         {"-payload-file","f",false,optf,"payload is file flag"},
         {"-nobody-show","n",false,optf,"not print body"},
         {"-custom-header","h",true,OptFlag::none,"set custom header"},
+        {"-auto-redirect","a",false,optf,"set auto redirect"},
+        {"-show-all-header","S",false,optf,"show all header"}
     });
-    auto flag=CmdFlag::invoke_parent|CmdFlag::use_parentopt|CmdFlag::take_over_prev_run;
+    constexpr auto flag=CmdFlag::invoke_parent|CmdFlag::use_parentopt|CmdFlag::take_over_prev_run;
     ctx.register_subcommand(httpc,"get",get<Buf>,"GET method",flag);
+    ctx.register_subcommand(httpc,"head",head<Buf>,"HEAD method",flag);
     ctx.register_subcommand(httpc,"post",post<Buf>,"POST method",flag);
     ctx.register_subcommand(httpc,"put",put<Buf>,"PUT method",flag);
     ctx.register_subcommand(httpc,"patch",patch<Buf>,"PATCH method",flag);
@@ -295,18 +331,31 @@ int http(const Arg<Buf>& arg,int prev,int pos){
     if(prev<0){
         return prev;
     }
-    if(!arg.exists_option("-nobody-show",true)){
-        logger << ctx->client->body();
+    bool anyshown=false;
+    if(!arg.exists_option("-nobody-show",true)&&ctx->client->body().size()){
+        logger << ctx->client->body() << "\n";
+        anyshown=true;
     }
     string opt;
     if(arg.exists_option("-summary",true)){
         PrintSummay<Buf>(arg,ctx);
+        anyshown=true;
     }
     if(arg.get_optarg(opt,"-output-file",0,true)){
         std::wstring path;
         StrStream(opt) >> u16filter >> path;
-        std::ofstream(path)<<ctx->client->body();
-        arg.log(logger,"content was saved to ",opt.c_str());
+        std::ofstream ofs(path,std::ios_base::binary);
+        if(ofs.is_open()){
+            ofs<<ctx->client->body();
+            arg.log(logger,"content was saved to ",opt.c_str());
+        }
+        else{
+            arg.log(logger,"warning:file '",opt.c_str(),"' not opened");
+        }
+        anyshown=true;
+    }
+    if(!anyshown){
+        arg.log(logger,"operation succeeded");
     }
     return 0;
 }
@@ -347,26 +396,14 @@ int command_impl(ArgVWrapper<char>&& input){
    return argv_command(std::forward<ArgVWrapper<char>>(input));
 }
 
-/*
-template<>
-int command_impl(ArgVWrapper<wchar_t>&& input){
-   return argv_command(std::forward<ArgVWrapper<wchar_t>>(input));
-}*/
-void command_common_init(){
-    
-}
-
 int command(const char* input){
-    command_common_init();
     return command_impl<std::string>(std::string(input));
 }
 
 int command_wchar(const wchar_t* input){
-    command_common_init();
     return command_impl<ToUTF8<std::wstring>>(std::wstring(input));
 }
 
 int command_argv(int argc,char** argv){
-    command_common_init();
     return command_impl<ArgVWrapper<char>>(ArgVWrapper<char>(argc,argv));
 }

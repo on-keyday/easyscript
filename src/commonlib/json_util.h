@@ -332,7 +332,7 @@ namespace PROJECT_NAME{
                 };
                 
 //#if (__cplusplus>=201703L)
-                if(ctx.floatf){
+                if(any(ctx.flag&NumberFlag::floatf)){
                     return parse_fl();
                 }
                 else{

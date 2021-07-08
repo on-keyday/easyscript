@@ -11,25 +11,30 @@ namespace PROJECT_NAME{
     template<class Buf,class T>
     auto& output_number(Reader<Buf>&& r,T& out){
         std::string buf;
-        if constexpr (std::is_integral_v<T>&&std::is_signed_v<T>){
+        bool minus=false;
+        if constexpr (std::is_signed_v<T>){
             if(r.expect("-")){
-                buf.push_back('-');
+                minus=true;
             }
         }
         NumberContext<b_char_type<Buf>> ctx;
         if constexpr (std::is_integral_v<T>){
-            ctx.only_int=true;
+            ctx.flag|=NumberFlag::only_int;
         }
         r.readwhile(buf,number,&ctx);
         if(ctx.failed||buf.size()==0){
             return r;
         }
         auto ofs=ctx.radix==10?0:ctx.radix==16||ctx.radix==2?2:1;
+        if(ofs)buf.erase(0,ofs);
+        if(minus){
+            buf="-"+buf;
+        }
         if constexpr (std::is_integral_v<T>){
-            parse_int(buf.data()+ofs,&buf.data()[buf.size()],out,ctx.radix);
+            parse_int(buf,out,ctx.radix);
         }
         else if constexpr(std::is_floating_point_v<T>){
-            parse_float(buf.data()+ofs,&buf.data()[buf.size()],out,ctx.radix==16);
+            parse_float(buf,out,ctx.radix==16);
         }
         return r;
     }

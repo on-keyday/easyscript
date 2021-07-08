@@ -107,19 +107,36 @@ namespace PROJECT_NAME{
         Ref(T& in):t(in) {}
     };
 
+    enum class NumberFlag:unsigned int{
+        none=0x0,
+        strict_hex=0x1,
+        must_sandwitchdot=0x2,
+        top_no_zero=0x4,
+        only_int=0x8,
+
+        floatf=0x1000,
+        expf=0x2000,
+        mustfloat=0x4000,
+        flag_reset=~floatf&~expf&~mustfloat
+    };
+
+    DEFINE_ENUMOP(NumberFlag)
+
     template<class Char>
     struct NumberContext{
         Char dotsymbol=(Char)'.';
-        bool strict_hex=false;
-        bool must_sandwichdot=false;
-        bool top_no_zero=false;
-        bool only_int=false;
+        NumberFlag flag=NumberFlag::none;
+        int radix=0;
+        bool failed=false;
+        bool (*judgenum)(Char)=nullptr;
+    };
 
+    template<class Char>
+    struct NumberContextOld{
         int radix=0;
         bool floatf=false;
         bool expf=false;
         bool failed=false;
-        bool mustfloat=false;
         bool (*judgenum)(Char)=nullptr;
     };
 
@@ -434,7 +451,7 @@ namespace PROJECT_NAME{
 
     inline namespace old{
     template<class Buf,class Ret,class Char>
-        bool number_old(Reader<Buf>* self,Ret& ret,NumberContext<Char>*& ctx,bool begin){
+        bool number_old(Reader<Buf>* self,Ret& ret,NumberContextOld<Char>*& ctx,bool begin){
             if(!ctx)return !begin;
             if(!self){
                 return true;
@@ -535,9 +552,22 @@ namespace PROJECT_NAME{
     template<class Buf,class Ret,class Char>
     bool number(Reader<Buf>* self,Ret& ret,NumberContext<Char>*& ctx,bool begin){
         if(!ctx)return !begin;
+        auto flag=[&ctx](NumberFlag in){
+            return any(ctx->flag&in);
+        };
+        auto not_struct_hex=[&flag,&ctx]{
+            return flag(NumberFlag::strict_hex)&&ctx->radix==16&&!flag(NumberFlag::expf);
+        };
+        auto must_but_not_float=[&flag,&ctx]{
+            return flag(NumberFlag::mustfloat)&&!flag(NumberFlag::floatf);
+        };
         if(!self){
-            if(ctx->mustfloat&&!ctx->floatf)ctx->failed=true;
-            if(ctx->strict_hex&&ctx->radix==16&&!ctx->expf)ctx->failed=true;
+            if(must_but_not_float()){
+                ctx->failed=true;
+            }
+            if(not_struct_hex()){
+                ctx->failed=true;
+            }
             return true;
         }
         auto n=self->achar();
@@ -547,12 +577,13 @@ namespace PROJECT_NAME{
             n=self->achar();
         };
         if(begin){
-            ctx->expf=false;
+            //ctx->expf=false;
             ctx->failed=false;
-            ctx->floatf=false;
+            //ctx->floatf=false;
             ctx->judgenum=nullptr;
             ctx->radix=0;
-            ctx->mustfloat=false;
+            //ctx->mustfloat=false;
+            ctx->flag&=NumberFlag::flag_reset;
             return true;
         }
         bool must=false;
@@ -564,12 +595,12 @@ namespace PROJECT_NAME{
                 ret.push_back((Char)self->offset(-1));
                 n = self->achar();
                 if(n==ctx->dotsymbol){
-                    if(ctx->must_sandwichdot||ctx->only_int){
+                    if(flag(NumberFlag::must_sandwitchdot)||flag(NumberFlag::only_int)){
                         ctx->failed=true;
                         return true;
                     }
                     increment();
-                    ctx->floatf=true;
+                    ctx->flag|=NumberFlag::floatf;
                 }
             }
             else if(self->expect("0b")||self->expect("0B")){
@@ -586,24 +617,24 @@ namespace PROJECT_NAME{
                 n = self->achar();
             }
             else if(self->expect("0",[](Char c){return !is_digit(c);})){
-                if(ctx->top_no_zero||ctx->only_int){
+                if(flag(NumberFlag::top_no_zero)||flag(NumberFlag::only_int)){
                     ctx->failed=true;
                     return true;
                 }
-                ctx->mustfloat=true;
+                ctx->flag|=NumberFlag::mustfloat;
                 ctx->radix=10;
                 ctx->judgenum=is_digit;
                 ret.push_back((Char)'0');
                 n = self->achar();
             }
             else if(n==ctx->dotsymbol){
-                if(ctx->must_sandwichdot||ctx->only_int){
+                if(flag(NumberFlag::must_sandwitchdot)||flag(NumberFlag::only_int)){
                     ctx->failed=true;
                     return true;
                 }
                 ctx->radix=10;
                 ctx->judgenum=is_digit;
-                ctx->floatf=true;
+                ctx->flag|=NumberFlag::floatf;
                 increment();
                 if(!is_digit(n)){
                     ctx->failed=true;
@@ -621,15 +652,15 @@ namespace PROJECT_NAME{
             must=true;
         }
         bool dot=false;
-        if(!ctx->only_int){
+        if(!flag(NumberFlag::only_int)){
             if(n==ctx->dotsymbol){
-                if(ctx->floatf){
+                if(flag(NumberFlag::floatf)){
                     ctx->failed=true;
                     return true;
                 }
-                ctx->floatf=true;
+                ctx->flag|=NumberFlag::floatf;
                 if(ctx->radix==8){
-                    if(ctx->top_no_zero){
+                    if(flag(NumberFlag::top_no_zero)){
                         ctx->failed=true;
                         return true;
                     }
@@ -641,16 +672,15 @@ namespace PROJECT_NAME{
             if((
                 (ctx->radix==10||ctx->radix==8)&&(n==(Char)'e'||n==(Char)'E')
             )||(ctx->radix==16&&(n==(Char)'p'||n==(Char)'P'))){
-                if(ctx->expf){
+                if(flag(NumberFlag::expf)){
                     ctx->failed=true;
                     return true;
                 }
-                if(ctx->must_sandwichdot&&dot){
+                if(flag(NumberFlag::must_sandwitchdot)&&dot){
                     ctx->failed=true;
                     return true;
                 }
-                ctx->expf=true;
-                ctx->floatf=true;
+                ctx->flag|=NumberFlag::expf|NumberFlag::floatf;
                 increment();
                 if(n!=(Char)'+'&&n!=(Char)'-'){
                     ctx->failed=true;
@@ -658,7 +688,7 @@ namespace PROJECT_NAME{
                 }
                 ctx->judgenum=is_digit;
                 if(ctx->radix==8){
-                    if(ctx->top_no_zero){
+                    if(flag(NumberFlag::top_no_zero)){
                         ctx->failed=true;
                         return true;
                     }
@@ -670,18 +700,18 @@ namespace PROJECT_NAME{
         }
         if(!ctx->judgenum(n)){
             if(ctx->radix==8&&is_digit(n)){
-                 if(ctx->top_no_zero){
+                 if(flag(NumberFlag::top_no_zero)){
                     ctx->failed=true;
                     return true;
                 }
-                ctx->mustfloat=true;
+                ctx->flag|=NumberFlag::mustfloat;
                 ctx->judgenum=is_digit;
             }
             else{
                 if(must)ctx->failed=true;
-                if(ctx->mustfloat&&!ctx->floatf)ctx->failed=true;
-                if(ctx->strict_hex&&ctx->radix==16&&!ctx->expf)ctx->failed=true;
-                if(ctx->must_sandwichdot&&dot)ctx->failed=true;
+                if(must_but_not_float())ctx->failed=true;
+                if(not_struct_hex())ctx->failed=true;
+                if(flag(NumberFlag::must_sandwitchdot)&&dot)ctx->failed=true;
                 return true;
             }
         }

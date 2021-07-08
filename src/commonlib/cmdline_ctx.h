@@ -36,6 +36,7 @@ namespace PROJECT_NAME{
     enum class LogFlag{
         none=0,
         program_name=0x1,
+        no_root_name=0x2,
     };
 
     DEFINE_ENUMOP(LogFlag);
@@ -46,6 +47,9 @@ namespace PROJECT_NAME{
         use_parentopt=0x2,
         take_over_prev_run=0x4,
         no_option=0x8,
+        ignore_opt_after_two_hyphen=0x10,
+        ignore_subc_after_two_hyphen=0x20,
+        ignore_special_after_two_hypen=ignore_opt_after_two_hyphen|ignore_subc_after_two_hyphen,
     };
 
     DEFINE_ENUMOP(CmdFlag)
@@ -182,14 +186,16 @@ namespace PROJECT_NAME{
         }
 
         template<class Obj>
-        void print_cmdname(Obj& obj,command_type* ctx)const{
+        void print_cmdname(LogFlag mode,Obj& obj,command_type* ctx)const{
             if(!ctx)return;
             if(ctx->parent){
-                print_cmdname(obj,ctx->parent);
+                print_cmdname(mode,obj,ctx->parent);
             }
             else{
-                if(!ctx->basectx)return;
-                ctx->print_program_name(obj);
+                if(!any(mode&LogFlag::no_root_name)){
+                    if(!ctx->basectx)return;
+                    ctx->print_program_name(obj);
+                }
             }
             obj << ctx->cmdname.c_str();
             obj << ":";
@@ -197,10 +203,15 @@ namespace PROJECT_NAME{
         }
     public:
         template<class Obj,class... Args>
-        void log(Obj& obj,Args... args)const{
+        void log_with_flag(LogFlag flag,Obj& obj,Args... args)const{
             if(!basectx)return;
-            if(any(logmode&LogFlag::program_name))print_cmdname(obj,basectx);
+            if(any(flag&LogFlag::program_name))print_cmdname(flag,obj,basectx);
             printlog_impl(obj,args...,"\n");
+        }
+
+        template<class Obj,class... Args>
+        void log(Obj& obj,Args... args)const{
+            log_with_flag(logmode,obj,args...);
         }        
     };
 
@@ -247,7 +258,6 @@ namespace PROJECT_NAME{
     };
 
     enum class OptCbFlag{
-        none=0,
         failed=0,
         redirect=0x1,
         succeed=0x2,
@@ -316,6 +326,17 @@ namespace PROJECT_NAME{
         const char* help=nullptr;
     };
 
+    enum class ErrorKind{
+        input=0x1,
+        user_callback=0x2,
+        option=0x4,
+        registered_config=0x8,
+        system=0x10,
+        param=0x20,
+    };
+
+    DEFINE_ENUMOP(ErrorKind)
+
     template<class Buf,class Str,template<class ...>class Map,template<class ...>class Vec,class User=void*>
     struct CmdlineCtx{
         using string_type=Str;
@@ -334,7 +355,7 @@ namespace PROJECT_NAME{
         using option_callback=typename command_type::option_callback;
 
         
-        using error_callback=void(*)(const string_type&,const char*,const string_type&,const char*);
+        using error_callback=void(*)(ErrorKind,const string_type&,const char*,const string_type&,const char*);
 
     private:
         friend CommandCtx<Buf,Str,Map,Vec,User>;
@@ -353,8 +374,8 @@ namespace PROJECT_NAME{
 
         map_type<string_type,std::shared_ptr<OptionInfo<string_type>>> rootopt;
 
-        void error(const char* err1,const string_type& msg=string_type(),const char* err2=""){
-            if(errcb)errcb(program_name,err1,msg,err2);
+        void error(ErrorKind kind,const char* err1,const string_type& msg=string_type(),const char* err2=""){
+            if(errcb)errcb(kind,program_name,err1,msg,err2);
         }
 
         template<class C>
@@ -374,13 +395,13 @@ namespace PROJECT_NAME{
         bool get_a_param(string_type& arg,command_type* ctx=nullptr){
             if(ctx&&ctx->self_proc){
                 if(!ctx->self_proc(r,arg)){
-                    error("user defined param callback failed");
+                    error(ErrorKind::param|ErrorKind::user_callback,"user defined param callback failed");
                     return false;
                 }
             }
             else{
                 if(!get_a_line(r,arg)){
-                    error("get param faild");
+                    error(ErrorKind::param,"get param faild");
                     return false;
                 }
             }
@@ -396,8 +417,8 @@ namespace PROJECT_NAME{
             return true;
         }
 
-        bool parse_a_option(const string_type& str,command_type& ctx,arg_type& out,bool* recover=nullptr){
-            std::shared_ptr<OptionInfo<string_type>> opt;
+        bool find_option(std::shared_ptr<OptionInfo<string_type>>& opt,const string_type& str,
+                        command_type& ctx,arg_type& out,bool* recover=nullptr){
             bool ok=false;
             bool on_parent=false;
             for(command_type* c=&ctx;c;c=c->parent){
@@ -420,7 +441,7 @@ namespace PROJECT_NAME{
                 }
                 else{
                     if(!recover){
-                        error("unknown option '",str,"'");
+                        error(ErrorKind::option,"unknown option '",str,"'");
                     }
                     else{
                         *recover=true;
@@ -432,23 +453,38 @@ namespace PROJECT_NAME{
                 auto p=&out;
                 do{
                     if(p->options.count(opt->name)){
-                        error("option ",str," is already set");
+                        error(ErrorKind::option,"option ",str," is already set");
                         return false;
                     }
                     p=p->parent;
                 }while(any(opt->flag&OptFlag::effect_to_parent)&&p);
-                
             }
+            return true;
+        }
+
+        bool parse_a_option(const string_type& str,command_type& ctx,arg_type& out,bool* recover=nullptr){
+            std::shared_ptr<OptionInfo<string_type>> opt;
+            if(!find_option(opt,str,ctx,out,recover))return false;
             vec_type<string_type>& optarg=out.options[opt->name];
             size_t count=0;
+            auto opterr=[&]{
+                if(count<opt->mustcount){
+                    error(ErrorKind::option,"option ",str," needs more argument");
+                    return false;
+                }
+                return true;
+            };
             while(count<opt->argcount){
+                if(r.ceof()){
+                    return opterr();
+                }
                 auto prevpos=r.readpos();
                 string_type arg;
-                if(!get_a_param(arg,&ctx)||arg[0]=='-'){
-                    if(count<opt->mustcount){
-                        error("option ",str," needs more argument");
-                        return false;
-                    }
+                if(!get_a_param(arg,&ctx)){
+                    return false;
+                }
+                if(arg[0]=='-'){
+                    if(!opterr())return false;
                     r.seek(prevpos);
                     break;
                 }
@@ -462,7 +498,7 @@ namespace PROJECT_NAME{
             if(ctx.option_proc){
                 auto res=ctx.option_proc(r,str,ctx.options,out.options);
                 if(!any(res)){
-                    error("user defined option callback failed");
+                    error(ErrorKind::option|ErrorKind::user_callback,"user defined option callback failed");
                     return false;
                 }
                 if(any(res&OptCbFlag::succeed)){
@@ -470,7 +506,7 @@ namespace PROJECT_NAME{
                 }
             }
             if(!str.size()){
-                error("not option value");
+                error(ErrorKind::option,"not option value");
                 return false;
             }
             if(str[0]=='-')return parse_a_option(str,ctx,out);
@@ -488,20 +524,31 @@ namespace PROJECT_NAME{
         }
 
         bool parse_default(command_type& ctx,arg_type& base,arg_type*& fin){
+            bool hypened=false;
+            bool igsubc=any(ctx.flag&CmdFlag::ignore_subc_after_two_hyphen);
+            bool igopt=any(ctx.flag&CmdFlag::ignore_opt_after_two_hyphen);
+            bool noopt=any(ctx.flag&CmdFlag::no_option);
+            bool twohypen=igopt||igsubc;
             while(!r.eof()){
                 string_type str;
                 if(!get_a_param(str,&ctx)){
-                    error("param get failed");
+                    //error("param get failed");
                     return false;
                 }
-                if(ctx.subcommands.count(str)){
+                bool subcmd=!(igsubc&&hypened);
+                bool option=!(igopt&&hypened)&&!noopt;
+                if(subcmd&&ctx.subcommands.count(str)){
                     command_type& sub=ctx.subcommands[str];
                     base.child.reset(new arg_type());
                     base.child->parent=&base;
                     base.child->logmode=base.logmode;
                     return parse_by_context(sub,*base.child,fin);
                 }
-                else if(!any(ctx.flag&CmdFlag::no_option)&&str[0]=='-'){
+                else if(twohypen&&!hypened&&str=="--"){
+                    hypened=true;
+                    continue;
+                }
+                else if(option&&str[0]=='-'){
                     str.erase(0,1);
                     if(!option_parse(str,ctx,base))return false;
                 }
@@ -545,7 +592,7 @@ namespace PROJECT_NAME{
 
         int run(const arg_type& arg){
             if(!arg.basectx){
-                error("library is broken");
+                error(ErrorKind::system,"library is broken");
                 return -1;
             }
             int res=-1;
@@ -574,7 +621,7 @@ namespace PROJECT_NAME{
                 }
             }
             if(!called){
-                error("any action is not registered");
+                error(ErrorKind::registered_config,"any action is not registered");
                 return -1;
             }
             for(auto cb:rootcb_after){
@@ -601,11 +648,11 @@ namespace PROJECT_NAME{
         bool input_common(Input in){
             //if(!in)return false;
             if(!in(r)){
-                error("input failed");
+                error(ErrorKind::input&ErrorKind::user_callback,"input failed");
                 return false;
             }
             if(!input()){
-                error("input failed");
+                error(ErrorKind::input,"input anything");
                 return false;
             }
             return true;

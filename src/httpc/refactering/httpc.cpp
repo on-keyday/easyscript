@@ -340,7 +340,11 @@ int http(const Arg<Buf>& arg,int prev,int pos){
         if(ctx->on_interactive){
             std::string ws;
             if(arg.get_arg(0,ws)){
+#ifdef _WIN32
                 arg.log(errorlog,"unknown command:",(StrStream(ws)>>u16filter>>utffilter).ref());
+#else  
+                arg.log(errorlog,"unknown command:",ws.c_str());
+#endif
             }
             else{
                 arg.log(errorlog,"input method!");

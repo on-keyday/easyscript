@@ -9,7 +9,7 @@
 #include<cstddef>
 #include<utility>
 
-#if __cplusplus > 201703L
+#if __cplusplus > 201703L && __has_include(<concepts>)
 #include<concepts>
 #endif
 
@@ -55,7 +55,7 @@ namespace PROJECT_NAME{
     using remove_cv_ref=std::remove_cv_t<std::remove_reference_t<T>>;
 
 
-#if __cplusplus > 201703L
+#if __cplusplus > 201703L && __has_include(<concepts>)
     template<class T>
     concept Is_integral=std::is_integral_v<remove_cv_ref<T>>;
 
@@ -74,7 +74,7 @@ namespace PROJECT_NAME{
     
    
     template<class Buf>
-#if __cplusplus > 201703L
+#if __cplusplus > 201703L && __has_include(<concepts>)
     requires Readable<Buf>||CharArray<Buf>
 #endif
     struct Reader{

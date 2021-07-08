@@ -128,7 +128,7 @@ namespace PROJECT_NAME{
         JSONType type=JSONType::unset;
 
 
-        inline static bool parse_ull(const std::string& str,unsigned long long& n){
+        inline static bool parse_ull(const std::string& str,uint64_t& n){
             return parse_int(str,n);
         }
 

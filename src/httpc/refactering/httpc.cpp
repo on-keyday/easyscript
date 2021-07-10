@@ -5,6 +5,9 @@
 #include"../http1.h"
 #ifdef _WIN32
 #include<windows.h>
+#include<direct.h>
+#else
+#include<unistd.h>
 #endif
 #include<cmdline_ctx.h>
 #include<iostream>
@@ -13,7 +16,7 @@
 #include<extension_operator.h>
 #include<fstream>
 #include<fileio.h>
-#include<direct.h>
+
 using namespace PROJECT_NAME;
 
 

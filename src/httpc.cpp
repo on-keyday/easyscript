@@ -17,7 +17,7 @@ int main(int argc,char** argv){
     SSL_load_error_strings();
     int ret=0;
 #ifdef _WIN32
-    ret=netclient_str(GetCommandLineA());
+    //ret=netclient_str(GetCommandLineA());
 #endif
     commonlib2::ArgChange _(argc,argv);
     ret=command_argv(argc,argv);

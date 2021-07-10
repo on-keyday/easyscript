@@ -50,6 +50,8 @@ namespace PROJECT_NAME{
         ignore_opt_after_two_hyphen=0x10,
         ignore_subc_after_two_hyphen=0x20,
         ignore_special_after_two_hypen=ignore_opt_after_two_hyphen|ignore_subc_after_two_hyphen,
+        use_parentcb=0x40,
+        ignore_invalid_option=0x80,
     };
 
     DEFINE_ENUMOP(CmdFlag)
@@ -354,6 +356,9 @@ namespace PROJECT_NAME{
         using param_self_callback=typename command_type::param_self_callback;
         using option_callback=typename command_type::option_callback;
 
+        using option_maptype=typename command_type::option_maptype;
+        using arg_option_maptype=typename arg_type::arg_option_maptype;
+
         
         using error_callback=void(*)(ErrorKind,const string_type&,const char*,const string_type&,const char*);
 
@@ -378,6 +383,22 @@ namespace PROJECT_NAME{
             if(errcb)errcb(kind,program_name,err1,msg,err2);
         }
 
+        /*template<class Func>
+        bool for_parents(command_type* ctx,Func func){
+            for(command_type* c=ctx;c;c=c->parent){
+                OptCbFlag flag=func(c);
+                if(flag==OptCbFlag::failed){
+                    return false;
+                }
+                if(flag==OptCbFlag::redirect){
+                    break;
+                }
+            }
+            return true;
+        }*/
+
+    #define for_parents(ctx) for(command_type* c=ctx;c;c=c->parent)
+
         template<class C>
         static bool get_a_line(Reader<ArgVWrapper<C>>& r,string_type& arg){
             auto c=(const C*)r.achar();
@@ -393,23 +414,34 @@ namespace PROJECT_NAME{
         }
 
         bool get_a_param(string_type& arg,command_type* ctx=nullptr){
-            if(ctx&&ctx->self_proc){
-                if(!ctx->self_proc(r,arg)){
-                    error(ErrorKind::param|ErrorKind::user_callback,"user defined param callback failed");
-                    return false;
+            bool ok=false;
+            for_parents(ctx){
+                if(c->self_proc){
+                    if(!c->self_proc(r,arg)){
+                        error(ErrorKind::param|ErrorKind::user_callback,"user defined param callback failed");
+                        return false;
+                    }
+                    ok=true;
+                    break;
                 }
-            }
-            else{
-                if(!get_a_line(r,arg)){
-                    error(ErrorKind::param,"get param faild");
-                    return false;
+                if(any(c->flag&CmdFlag::use_parentcb)){
+                    continue;
                 }
+                break;
             }
-            for(command_type* c=ctx;c;c=c->parent){
+            if(!ok&&!get_a_line(r,arg)){
+                error(ErrorKind::param,"get param faild");
+                return false;
+            }
+            for_parents(ctx){
                 if(c->param_proc){
                     c->param_proc(arg);
                     return true;
                 }
+                if(any(c->flag&CmdFlag::use_parentcb)){
+                    continue;
+                }
+                break;
             }
             if(param_proc){
                 param_proc(arg);
@@ -418,10 +450,10 @@ namespace PROJECT_NAME{
         }
 
         bool find_option(std::shared_ptr<OptionInfo<string_type>>& opt,const string_type& str,
-                        command_type& ctx,arg_type& out,bool* recover=nullptr){
+                        command_type& ctx,arg_type& out,bool* recover,bool show_err){
             bool ok=false;
             bool on_parent=false;
-            for(command_type* c=&ctx;c;c=c->parent){
+            for_parents(&ctx){
                 if(c->options.count(str)){
                     decltype(opt)& ref=c->options[str];
                     if(!on_parent||!any(ref->flag&OptFlag::hidden_from_child)){
@@ -440,10 +472,11 @@ namespace PROJECT_NAME{
                     opt=rootopt[str];
                 }
                 else{
-                    if(!recover){
-                        error(ErrorKind::option,"unknown option '",str,"'");
+                    if(show_err){
+                        const char* msg=recover?"'(ignored)":"'";
+                        error(ErrorKind::option,"unknown option '",str,msg);
                     }
-                    else{
+                    if(recover){
                         *recover=true;
                     }
                     return false;
@@ -462,9 +495,9 @@ namespace PROJECT_NAME{
             return true;
         }
 
-        bool parse_a_option(const string_type& str,command_type& ctx,arg_type& out,bool* recover=nullptr){
+        bool parse_a_option(const string_type& str,command_type& ctx,arg_type& out,bool* recover,bool show_err){
             std::shared_ptr<OptionInfo<string_type>> opt;
-            if(!find_option(opt,str,ctx,out,recover))return false;
+            if(!find_option(opt,str,ctx,out,recover,show_err))return false;
             vec_type<string_type>& optarg=out.options[opt->name];
             size_t count=0;
             auto opterr=[&]{
@@ -495,30 +528,41 @@ namespace PROJECT_NAME{
         }
 
         bool option_parse(string_type& str,command_type& ctx,arg_type& out){
-            if(ctx.option_proc){
-                auto res=ctx.option_proc(r,str,ctx.options,out.options);
-                if(!any(res)){
-                    error(ErrorKind::option|ErrorKind::user_callback,"user defined option callback failed");
-                    return false;
+            for_parents(&ctx){
+                if(c->option_proc){
+                    auto res=c->option_proc(r,str,ctx.options,out.options);
+                    if(!any(res)){
+                        error(ErrorKind::option|ErrorKind::user_callback,"user defined option callback failed");
+                        return false;
+                    }
+                    if(any(res&OptCbFlag::succeed)){
+                        return true;
+                    }
+                    break;
                 }
-                if(any(res&OptCbFlag::succeed)){
-                    return true;
+                if(any(c->flag&CmdFlag::use_parentcb)){
+                    continue;
                 }
+                break;
             }
             if(!str.size()){
                 error(ErrorKind::option,"not option value");
                 return false;
             }
-            if(str[0]=='-')return parse_a_option(str,ctx,out);
+            auto f=any(ctx.flag&CmdFlag::ignore_invalid_option);
             bool recov=false;
-            if(parse_a_option(str,ctx,out,&recov)){
+            if(parse_a_option(str,ctx,out,&recov,false)){
                 return true;
             }
             if(!recov){
                 return false;
             }
             for(auto& c:str){
-                if(!parse_a_option(string_type(1,c),ctx,out))return false;
+                recov=false;
+                if(!parse_a_option(string_type(1,c),ctx,out,f?&recov:nullptr,true)){
+                    if(recov)continue;
+                    return false;
+                }
             }
             return true;
         }
@@ -550,7 +594,9 @@ namespace PROJECT_NAME{
                 }
                 else if(option&&str[0]=='-'){
                     str.erase(0,1);
-                    if(!option_parse(str,ctx,base))return false;
+                    if(!option_parse(str,ctx,base)){
+                        return false;
+                    }
                 }
                 else{
                     base.arg.push_back(str);
@@ -665,10 +711,10 @@ namespace PROJECT_NAME{
 
         //[[nodiscard]]
         command_type* register_command(const string_type& name,command_callback proc,
-        const string_type& help=string_type(),command_callback prev_run=nullptr){
+        const string_type& help=string_type(),CmdFlag flag=CmdFlag::none,command_callback prev_run=nullptr){
             if(!proc||_command.count(name))return nullptr;
             command_type& cmd=_command[name];
-            return register_command_impl(cmd,name,proc,help,CmdFlag::none,prev_run);
+            return register_command_impl(cmd,name,proc,help,flag,prev_run);
         }
 
         //[[nodiscard]]
@@ -725,10 +771,11 @@ namespace PROJECT_NAME{
             return true;
         }
 
-        bool register_callbacks(command_type* cmd,param_callback param,param_self_callback self=nullptr){
+        bool register_callbacks(command_type* cmd,param_callback param,option_callback option,param_self_callback self){
             if(!cmd)return false;
             cmd->param_proc=param;
             cmd->self_proc=self;
+            cmd->option_proc=option;
             return true;
         }
 

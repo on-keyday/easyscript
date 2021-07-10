@@ -6,12 +6,12 @@
             "type": "cppvsdbg",
             "request": "launch",
             "program": "${workspaceFolder}/cl_build/built/built/httpc.exe",
-            "args": ["-cs","D:\\CommonLib\\netsoft\\cacert.pem","https://google.com"],
+            "args": ["-l","-cs","D:\\CommonLib\\netsoft\\cacert.pem","https://google.com"],
             "stopAtEntry": false,
             "cwd": "${workspaceFolder}/cl_build/built/built",
             "environment": [],
             "preLaunchTask": "build_cpp",
-            "console":"newExternalWindow"
+            "console":"externalTerminal"
         },
         {
             "name": "(clang_build)",

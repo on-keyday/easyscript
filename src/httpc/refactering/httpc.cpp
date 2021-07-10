@@ -13,6 +13,7 @@
 #include<extension_operator.h>
 #include<fstream>
 #include<fileio.h>
+#include<direct.h>
 using namespace PROJECT_NAME;
 
 
@@ -39,10 +40,38 @@ using Argv=typename CmdLine<ArgVWrapper<C>>::arg_type;
 template<class Buf>
 using Cmd=typename CmdLine<Buf>::command_type;
 
-auto& logger=std::cout;
-auto& errorlog=std::cerr;
+enum class LoggerMode{
+    std_out=0x1,
+    std_err=0x2,
+    both=std_out|std_err,
+};
+DEFINE_ENUMOP(LoggerMode)
 
+struct Logger{
+    LoggerMode mode;
 
+    Logger(LoggerMode mode){
+        set_mode(mode);
+    }
+
+    void set_mode(LoggerMode in){
+        mode=in;
+    }
+
+    template<class T>
+    Logger& operator<<(const T& t){
+        if(any(mode&LoggerMode::std_out)){
+            std::cout << t;
+        }
+        if(any(mode&LoggerMode::std_err)){
+            std::cerr << t;
+        }
+        return *this;
+    }
+};
+
+auto logger=Logger(LoggerMode::std_out);
+auto errorlog=Logger(LoggerMode::std_err);
 
 template<class Buf,class Func>
 int getting_method(const Arg<Buf>& arg,Func func){
@@ -177,9 +206,58 @@ int exit(const Arg<Buf>& arg,int prev,int){
 template<class Buf>
 int clear(const Arg<Buf>& arg,int,int){
     ::system("cls");
-    return 0;
+    return 1;
 }
 
+template<class Buf>
+int cd(const Arg<Buf>& arg,int,int){
+    string cwd;
+    if(!arg.get_arg(0,cwd)){
+        arg.log(errorlog,"error:one argument required");
+        return -1;
+    }
+#ifdef _WIN32
+    std::wstring tmp;
+    StrStream(cwd)>>u16filter>>tmp;
+    if(_wchdir(tmp.c_str())){
+        std::string show;
+        StrStream(tmp)>>utffilter>>show;
+        arg.log(errorlog,"error: '",show,"':no such directory");
+        return -2;
+    }
+#else
+    if(chdir(cwd.c_str())){
+        arg.log(errorlog,"error: '",cwd,"':no such directory");
+        return -2;
+    }
+#endif
+    return 1;
+}
+
+template<class Buf>
+int echo(const Arg<Buf>& arg,int,int){
+    for(auto& a:arg){
+#ifdef _WIN32
+        std::string e;
+        StrStream(a)>>u16filter>>utffilter>> e;
+        logger << e;
+#else
+        logger << a;
+#endif
+        logger << " ";
+    }
+    logger << "\n";
+    return 1;
+}
+
+template<class Buf>
+int hello(const Arg<Buf>& arg,int,int){
+    logger << "Hello User!\n";
+    logger << "I'm 'httpc', a HTTP(S) client software!\n";
+    logger << "My job is the agent on the Internet of YOU!\n";
+    logger << "Best Regards!\n";
+    return 1;
+}
 template<class Buf>
 int interactive(const Arg<Buf>& arg,Context* ctx){
     ctx->on_interactive=true;
@@ -191,9 +269,14 @@ int interactive(const Arg<Buf>& arg,Context* ctx){
     cmdline->register_subcommand(cmd,"exit",exit<Buf>,"",CmdFlag::no_option);
     cmdline->register_subcommand(cmd,"quit",exit<Buf>,"",CmdFlag::no_option);
     cmdline->register_subcommand(cmd,"clear",clear<Buf>,"",CmdFlag::no_option);
+    cmdline->register_subcommand(cmd,"cd",cd<Buf>,"",CmdFlag::no_option);
+    cmdline->register_subcommand(cmd,"echo",echo<Buf>,"",CmdFlag::no_option);
+    cmdline->register_subcommand(cmd,"hello",hello<Buf>,"",CmdFlag::no_option);
     int res=0;
     while(!ctx->exit){
-        logger << "command?>>";
+        char* cd=_getcwd(NULL,0);
+        if(cd)logger << cd;
+        logger << ">>";
         res=cmdline->execute_with_context(cmd,[](auto& in){
             std::string ws;
             std::getline(std::cin,ws);
@@ -204,6 +287,7 @@ int interactive(const Arg<Buf>& arg,Context* ctx){
 #endif
             return true;
         },LogFlag::none);
+        free(cd);
     }
     logger << "Bye\n";
     return res;
@@ -261,9 +345,7 @@ int common_option_get(const Arg<Buf>& arg,int prev,int pos){
     else{
         ctx->client->set_auto_redirect(false);
     }
-    /*else{
-        ctx->client->set_cacert("./cacert.pem");
-    }*/
+    
     return 0;
 }
 
@@ -273,9 +355,20 @@ void simple_err(ErrorKind kind,const string&,const char* err1,const string& err2
 }
 
 template<class Buf>
-Cmd<Buf>* SetCommand(CmdLine<Buf>& ctx){
+OptCbFlag logger_option(Reader<Buf>& r,string& arg,
+const typename CmdLine<Buf>::option_maptype&,typename CmdLine<Buf>::arg_option_maptype&){
+    if(arg=="-out-both-logger"){
+        logger.set_mode(LoggerMode::both);
+        errorlog.set_mode(LoggerMode::both);
+        return OptCbFlag::succeed;
+    }
+    return OptCbFlag::redirect;
+}
+
+template<class Buf>
+Cmd<Buf>* SetCommand(CmdLine<Buf>& ctx,bool set_logout=false){
     ctx.register_error(simple_err);
-    auto httpc=ctx.register_command("httpc",http<Buf>,"",common_option_get<Buf>);
+    auto httpc=ctx.register_command("httpc",http<Buf>,"",CmdFlag::ignore_invalid_option,common_option_get<Buf>);
     constexpr auto optf=OptFlag::only_one|OptFlag::effect_to_parent;
     ctx.register_by_optname(httpc,{
         {"-output-file","o",true,optf,"set output file"},
@@ -289,13 +382,17 @@ Cmd<Buf>* SetCommand(CmdLine<Buf>& ctx){
         {"-auto-redirect","a",false,optf,"set auto redirect"},
         {"-show-all-header","S",false,optf,"show all header"}
     });
-    constexpr auto flag=CmdFlag::invoke_parent|CmdFlag::use_parentopt|CmdFlag::take_over_prev_run;
+    constexpr auto flag=CmdFlag::invoke_parent|CmdFlag::use_parentopt|CmdFlag::use_parentcb|
+    CmdFlag::take_over_prev_run|CmdFlag::ignore_invalid_option;
     ctx.register_subcommand(httpc,"get",get<Buf>,"GET method",flag);
     ctx.register_subcommand(httpc,"head",head<Buf>,"HEAD method",flag);
     ctx.register_subcommand(httpc,"post",post<Buf>,"POST method",flag);
     ctx.register_subcommand(httpc,"put",put<Buf>,"PUT method",flag);
     ctx.register_subcommand(httpc,"patch",patch<Buf>,"PATCH method",flag);
     ctx.register_subcommand(httpc,"delete",_delete<Buf>,"DELETE method",flag);
+    if(set_logout){
+        ctx.register_callbacks(httpc,nullptr,logger_option,nullptr);
+    }
     return httpc;
 }
 
@@ -364,7 +461,7 @@ int http(const Arg<Buf>& arg,int prev,int pos){
         arg.log(logger,"error:",ctx->client->err().c_str());
         return -2;
     }
-    if(prev<0){
+    if(prev){
         return prev;
     }
     bool anyshown=false;
@@ -397,7 +494,8 @@ int http(const Arg<Buf>& arg,int prev,int pos){
     if(!anyshown){
         arg.log(logger,"operation succeeded");
     }
-    return 0;
+    if(ctx->client->statuscode()>=200&&ctx->client->statuscode()<300)return 0;
+    return ctx->client->statuscode();
 }
 
 template<class Buf>
@@ -408,7 +506,7 @@ int command_impl(Buf&& input){
     Context& user=ctx.get_user();
     user.client=&client;
     user.client->set_requestadder(custom_header,&user);
-    auto httpc=SetCommand(ctx);
+    auto httpc=SetCommand(ctx,true);
     return ctx.execute_with_context(httpc,[&](auto& r){
         r=std::move(input);
         return true;
@@ -423,7 +521,7 @@ int argv_command(ArgVWrapper<C>&& input){
     Context& user=ctx.get_user();
     user.client=&client;
     user.client->set_requestadder(custom_header,&user);
-    auto httpc=SetCommand(ctx);
+    auto httpc=SetCommand(ctx,true);
     return ctx.execute_with_context(httpc,[&](auto& r){
         r.ref()=std::move(input);
         r.increment();

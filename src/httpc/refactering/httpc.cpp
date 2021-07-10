@@ -226,7 +226,7 @@ int cd(const Arg<Buf>& arg,int,int){
     if(_wchdir(tmp.c_str())){
         std::string show;
         StrStream(tmp)>>utffilter>>show;
-        arg.log(errorlog,"error: '",show,"':no such directory");
+        arg.log(errorlog,"error:'",show,"':no such directory");
         return -2;
     }
 #else

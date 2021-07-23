@@ -425,7 +425,7 @@ namespace PROJECT_NAME{
     DEFINE_UTF_TEMPLATE
     (ToUTF16,1,(utf8toutf16<Buf,U16MiniBuffer>),([](Reader<Buf>*r){return utf8seek_minus<Buf>(r);}),U16MiniBuffer);
 
-    /*
+    //*
     template<class Buf>
     ToUTF8(const Buf&)->ToUTF8<Buf,b_char_size_v<Buf>>;
 
@@ -442,7 +442,7 @@ namespace PROJECT_NAME{
     ToUTF16(Buf&&)->ToUTF16<Buf,b_char_size_v<Buf>>;
 
     template<class Buf>
-    ToUTF32(Buf&&)->ToUTF32<Buf,b_char_size_v<Buf>>;*/
+    ToUTF32(Buf&&)->ToUTF32<Buf,b_char_size_v<Buf>>;//*/
 
 
     template<class Buf>

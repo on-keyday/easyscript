@@ -410,7 +410,7 @@ namespace PROJECT_NAME{
 
         template<class Bufi>
         static bool get_a_line(Reader<Bufi>& r,string_type& arg){
-            return get_cmdline(r,1,true,arg);
+            return get_cmdline(r,1,true,true,arg);
         }
 
         bool get_a_param(string_type& arg,command_type* ctx=nullptr){

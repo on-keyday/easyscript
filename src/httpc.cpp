@@ -19,6 +19,7 @@ int main(int argc,char** argv){
 #ifdef _WIN32
     //ret=netclient_str(GetCommandLineA());
 #endif
+    std::ios_base::sync_with_stdio(false);
     commonlib2::ArgChange _(argc,argv);
     ret=command_argv(argc,argv);
     //http2_test();

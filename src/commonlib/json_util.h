@@ -1329,6 +1329,7 @@ namespace PROJECT_NAME{
                     if(!patch_add(base,op,lastelm))return JSON();
                 }
             }
+            return JSON();
         }
 
         JSON merge(const JSON& from){

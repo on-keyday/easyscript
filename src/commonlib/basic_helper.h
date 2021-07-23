@@ -67,6 +67,7 @@ namespace PROJECT_NAME{
         size_t size()const{
             return buf.size();
         }
+        Refer(const Refer& in):buf(in.buf){}
         Refer(Refer&& in)noexcept:buf(in.buf){}
         Refer(Buf& in):buf(in){}
     };
@@ -386,11 +387,14 @@ namespace PROJECT_NAME{
 
     template<class Buf,class Ret>
     bool cmdline_read(Reader<Buf>* self,Ret& ret,int*& res,bool begin){
-        if(begin)return true;
+        if(begin){
+            if(!res)return false;
+            return true;
+        }
         if(!self)return true;
         auto c=self->achar();
         if(is_string_symbol(c)){
-            if(!self->string(ret)){
+            if(!self->string(ret,!(*res))){
                 *res=0;
             }
             else{
@@ -425,13 +429,13 @@ namespace PROJECT_NAME{
     }
 
     template<class Buf>
-    bool get_cmdline(Reader<Buf>& , int mincount, bool) {
+    bool get_cmdline(Reader<Buf>& , int mincount, bool,bool) {
         return mincount == 0;
     }
 
     template<class Buf,class Now,class... Args>
-    bool get_cmdline(Reader<Buf>& r,int mincount,bool fit,Now& now,Args&... arg){
-        int i=0;
+    bool get_cmdline(Reader<Buf>& r,int mincount,bool fit,bool lineok,Now& now,Args&... arg){
+        int i=lineok?1:0;
         r.ahead("'");
         r.readwhile(now,cmdline_read,&i);
         if(i==0){
@@ -440,7 +444,7 @@ namespace PROJECT_NAME{
         if(fit&&mincount==0){
             return true;
         }
-        return get_cmdline(r,mincount==0?0:mincount-1,fit,arg...);
+        return get_cmdline(r,mincount==0?0:mincount-1,fit,lineok,arg...);
     }
 
     template<class Func,class...Args>
@@ -805,7 +809,7 @@ namespace PROJECT_NAME{
             if(static_cast<size_t>(ed-be)!=idx){
                 return false;
             }
-            if(need_bytes(t,!is_unsigned<N>)>sizeof(N))return false;
+            if(need_bytes(t,!is_unsigned<N>())>sizeof(N))return false;
             n=(N)t;
         }
         catch(...){
@@ -879,7 +883,7 @@ namespace PROJECT_NAME{
     template<class Buf,class T>
     struct ByteTo{
     private:
-        static_assert(sizeof(b_char_type<Buf>)==1);
+        static_assert(sizeof(b_char_type<Buf>)==1,"");
         Buf buf;
     public:
         T operator[](size_t pos)const{
@@ -896,9 +900,9 @@ namespace PROJECT_NAME{
     };
 
     template<class Buf,class T>
-    struct Reverse{
+    struct ReverseByte{
     private:
-        static_assert(sizeof(b_char_type<Buf>)==1);
+        static_assert(sizeof(b_char_type<Buf>)==1,"");
         Buf buf;
     public:
         T operator[](size_t pos)const{
@@ -909,15 +913,15 @@ namespace PROJECT_NAME{
             return OrderedSize(buf.size(),sizeof(T));
         }
 
-        Reverse(){}
-        Reverse(const Buf& in):buf(in){}
-        Reverse(Buf&& in):buf(std::forward<Buf>(in)){}
+        ReverseByte(){}
+        ReverseByte(const Buf& in):buf(in){}
+        ReverseByte(Buf&& in):buf(std::forward<Buf>(in)){}
     };
 
     template<class Buf,class T>
     struct Order{
     private:    
-        static_assert(sizeof(b_char_type<Buf>)==1);
+        static_assert(sizeof(b_char_type<Buf>)==1,"");
         Buf buf;
         bool reverse=false;
     public:
@@ -938,5 +942,27 @@ namespace PROJECT_NAME{
         void set_reverse(bool rev){
             reverse=rev;
         }
+    };
+
+    template<class Buf>
+    struct Reverse{
+        Buf buf;
+        size_t size()const{
+            return buf.size();
+        }
+
+        b_char_type<Buf> operator[](size_t pos)const{
+            if(pos>=size())return b_char_type<Buf>();
+            return buf[size()-1-pos];
+        }
+
+        b_char_type<Buf> operator[](size_t pos){
+            if(pos>=size())return b_char_type<Buf>();
+            return buf[size()-1-pos];
+        }
+
+        Reverse(){}
+        Reverse(const Buf& in):buf(in){}
+        Reverse(Buf&& in):buf(std::forward<Buf>(in)){}
     };
 }

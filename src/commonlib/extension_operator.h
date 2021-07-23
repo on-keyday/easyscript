@@ -12,13 +12,13 @@ namespace PROJECT_NAME{
     auto& output_number(Reader<Buf>&& r,T& out){
         std::string buf;
         bool minus=false;
-        if constexpr (std::is_signed_v<T>){
+        if CONSTEXPRIF (std::is_signed_v<T>){
             if(r.expect("-")){
                 minus=true;
             }
         }
         NumberContext<b_char_type<Buf>> ctx;
-        if constexpr (std::is_integral_v<T>){
+        if CONSTEXPRIF (std::is_integral_v<T>){
             ctx.flag|=NumberFlag::only_int;
         }
         r.readwhile(buf,number,&ctx);
@@ -30,10 +30,10 @@ namespace PROJECT_NAME{
         if(minus){
             buf="-"+buf;
         }
-        if constexpr (std::is_integral_v<T>){
+        if CONSTEXPRIF (std::is_integral_v<T>){
             parse_int(buf,out,ctx.radix);
         }
-        else if constexpr(std::is_floating_point_v<T>){
+        else if CONSTEXPRIF(std::is_floating_point_v<T>){
             parse_float(buf,out,ctx.radix==16);
         }
         return r;
@@ -41,12 +41,12 @@ namespace PROJECT_NAME{
     
 #define DEFINE_OPERATOR_RSHIFT_NUM(TYPE) \
     template<class Buf>\
-    auto operator>>(Reader<Buf>& r,TYPE& out){\
+    auto& operator>>(Reader<Buf>& r,TYPE& out){\
         return output_number<Buf,TYPE>(std::forward<Reader<Buf>>(r),out);\
     }\
     \
     template<class Buf>\
-    auto operator>>(Reader<Buf>&& r,TYPE& out){\
+    auto& operator>>(Reader<Buf>&& r,TYPE& out){\
         return output_number<Buf,TYPE>(std::forward<Reader<Buf>>(r),out);\
     }
 
@@ -69,15 +69,15 @@ namespace PROJECT_NAME{
 
     template<class Buf,class Str>
     auto& output_str(Reader<std::enable_if_t<bcsizeeq<Buf,1>,Buf>>&& r,Str& str){
-        if constexpr(bcsizeeq<Str,1>){
+        if CONSTEXPRIF(bcsizeeq<Str,1>){
             str.reserve(r.readable());
             r.readwhile(str,untilincondition,do_nothing<b_char_type<Buf>>);
         }
-        else if constexpr(bcsizeeq<Str,2>){
+        else if CONSTEXPRIF(bcsizeeq<Str,2>){
             int ctx=0;
             r.readwhile(str,utf8toutf16,&ctx);
         }
-        else if constexpr(bcsizeeq<Str,4>){
+        else if CONSTEXPRIF(bcsizeeq<Str,4>){
             int ctx=0;
             r.readwhile(str,utf8toutf32,&ctx);
         }
@@ -86,15 +86,15 @@ namespace PROJECT_NAME{
 
     template<class Buf,class Str>
     auto& output_str(Reader<std::enable_if_t<bcsizeeq<Buf,2>,Buf>>&& r,Str& str){
-        if constexpr(bcsizeeq<Str,1>){
+        if CONSTEXPRIF(bcsizeeq<Str,1>){
             int ctx=0;
             r.readwhile(str,utf16toutf8,&ctx);
         }
-        else if constexpr(bcsizeeq<Str,2>){
+        else if CONSTEXPRIF(bcsizeeq<Str,2>){
             str.reserve(r.readable());
             r.readwhile(str,untilincondition,do_nothing<b_char_type<Buf>>);
         }
-        else if constexpr(bcsizeeq<Str,4>){
+        else if CONSTEXPRIF(bcsizeeq<Str,4>){
             int ctx=0;
             r.readwhile(str,utf16toutf32,&ctx);
         }
@@ -103,15 +103,15 @@ namespace PROJECT_NAME{
 
     template<class Buf,class Str>
     auto& output_str(Reader<std::enable_if_t<bcsizeeq<Buf,4>,Buf>>&& r,Str& str){
-        if constexpr(bcsizeeq<Str,1>){
+        if CONSTEXPRIF(bcsizeeq<Str,1>){
             int ctx=0;
             r.readwhile(str,utf32toutf8,&ctx);
         }
-        else if constexpr(bcsizeeq<Str,2>){
+        else if CONSTEXPRIF(bcsizeeq<Str,2>){
             int ctx=0;
             r.readwhile(str,utf32toutf16,&ctx);
         }
-        else if constexpr(bcsizeeq<Str,4>){
+        else if CONSTEXPRIF(bcsizeeq<Str,4>){
             str.reserve(r.readable());
             r.readwhile(str,untilincondition,do_nothing<b_char_type<Buf>>);
         }
@@ -134,24 +134,24 @@ namespace PROJECT_NAME{
     struct U16Filter_Type{};
     struct U32Filter_Type{};
     
-    U8Filter_Type u8filter(){return U8Filter_Type();}
-    U16Filter_Type u16filter(){return U16Filter_Type();}
-    U32Filter_Type u32filter(){return U32Filter_Type();}
+    inline U8Filter_Type u8filter(){return U8Filter_Type();}
+    inline U16Filter_Type u16filter(){return U16Filter_Type();}
+    inline U32Filter_Type u32filter(){return U32Filter_Type();}
 
     template<class IStream>
     auto filter_char_size(IStream&& in,U8Filter_Type(*)()){
         Reader<std::string> r;
         constexpr int size=sizeof(typename IStream::char_type);
         int C=0;
-        if constexpr(size==1){
+        if CONSTEXPRIF(size==1){
             in >> r.ref();
         }
-        else if constexpr(size==2){
+        else if CONSTEXPRIF(size==2){
             Reader<std::conditional_t<sizeof(wchar_t)==2,std::wstring,std::u16string>> str;
             in >> str.ref();
             str.readwhile(r.ref(),utf16toutf8,&C);
         }
-        else if constexpr(size==4){
+        else if CONSTEXPRIF(size==4){
             Reader<std::conditional_t<sizeof(wchar_t)==4,std::wstring,std::u32string>> str;
             in >> str.ref();
             str.readwhile(r.ref(),utf32toutf8,&C);
@@ -164,15 +164,15 @@ namespace PROJECT_NAME{
         Reader<std::conditional_t<sizeof(wchar_t)==2,std::wstring,std::u16string>> r;
         constexpr int size=sizeof(typename IStream::char_type);
         int C=0;
-        if constexpr(size==1){
+        if CONSTEXPRIF(size==1){
             Reader<std::string> str;
             in >> str.ref();
             str.readwhile(r.ref(),utf8toutf16,&C);
         }
-        else if constexpr(size==2){
+        else if CONSTEXPRIF(size==2){
             in >> r.ref();
         }
-        else if constexpr(size==4){
+        else if CONSTEXPRIF(size==4){
             Reader<std::conditional_t<sizeof(wchar_t)==4,std::wstring,std::u32string>> str;
             in >> str.ref();
             str.readwhile(r.ref(),utf32toutf16,&C);
@@ -185,17 +185,17 @@ namespace PROJECT_NAME{
         Reader<std::conditional_t<sizeof(wchar_t)==4,std::wstring,std::u32string>> r;
         constexpr int size=sizeof(typename IStream::char_type);
         int C=0;
-        if constexpr(size==1){
+        if CONSTEXPRIF(size==1){
             Reader<std::string> str;
             in >> str.ref();
             str.readwhile(r.ref(),utf8toutf32,&C);
         }
-        else if constexpr(size==2){
+        else if CONSTEXPRIF(size==2){
             Reader<std::conditional_t<sizeof(wchar_t)==2,std::wstring,std::u16string>> str;
             in >> str.ref();
             str.readwhile(r.ref(),utf16toutf32,&C);
         }
-        else if constexpr(size==4){
+        else if CONSTEXPRIF(size==4){
             in >> r.ref();
         }
         return r;
@@ -204,13 +204,13 @@ namespace PROJECT_NAME{
 #ifdef _WIN32 /*for windows in Japanese-lang*/
     struct CP932Filter_Type{};
     struct TOCP932Filter_Type{};
-    CP932Filter_Type nativefilter(){return CP932Filter_Type();}
-    TOCP932Filter_Type utffilter(){return TOCP932Filter_Type();}
+    inline CP932Filter_Type nativefilter(){return CP932Filter_Type();}
+    inline TOCP932Filter_Type utffilter(){return TOCP932Filter_Type();}
 
     template<class IStream>
     auto filter_char_size(IStream&& in,CP932Filter_Type(*)()){
         Reader<std::wstring> r;
-        static_assert(sizeof(typename IStream::char_type)==1);
+        static_assert(sizeof(typename IStream::char_type)==1,"");
         Reader<std::string> str;
         in >> str.ref();
         int ctx=0;
@@ -221,7 +221,7 @@ namespace PROJECT_NAME{
     template<class IStream>
     auto filter_char_size(IStream&& in,TOCP932Filter_Type(*)()){
         Reader<std::string> r;
-        static_assert(sizeof(typename IStream::char_type)==2);
+        static_assert(sizeof(typename IStream::char_type)==2,"");
         Reader<std::wstring> str;
         in >> str.ref();
         int ctx=0;
@@ -229,8 +229,8 @@ namespace PROJECT_NAME{
         return r;
     }
 #else
-    U16Filter_Type nativefilter(){return U16Filter_Type();}
-    U8Filter_Type utffilter(){return U8Filter_Type();}
+    inline U16Filter_Type nativefilter(){return U16Filter_Type();}
+    inline U8Filter_Type utffilter(){return U8Filter_Type();}
 #endif
 
     template<class Char,class Traits,class Filter>
@@ -295,14 +295,14 @@ namespace PROJECT_NAME{
     template<class Buf>
     decltype(auto) operator>>(Reader<Buf>&& r,TOCP932Filter_Type(*)()){
         Reader<std::string> ret;
-        StrStream(r.ref()) >> utffilter >> ret.ref();
+        StrStream<Buf>(r.ref()) >> utffilter >> ret.ref();
         return ret;
     }
 
     template<class Buf>
     decltype(auto) operator>>(Reader<Buf>&& r,CP932Filter_Type(*)()){
         Reader<std::wstring> ret;
-        StrStream(r.ref()) >> nativefilter >> ret.ref();
+        StrStream<Buf>(r.ref()) >> nativefilter >> ret.ref();
         return ret;
     }
 #endif
@@ -351,15 +351,15 @@ namespace PROJECT_NAME{
 
     template<class Buf,class C,class Str>
     auto& operator>>(Pairing<Buf,C>&& p,Str& str){
-        if constexpr (b_char_size_v<Buf> == b_char_size_v<Str>){
+        if CONSTEXPRIF (b_char_size_v<Buf> == b_char_size_v<Str>){
             (*p.first).readwhile(str,untilincondition,p.second);
         }
         return *p.first;
     }
-
+    /*
     struct Cut_Type{};
 
-    Cut_Type cut(){return Cut_Type();}
+    inline Cut_Type cut(){return Cut_Type();}
 
     template<class Buf>
     auto& operator>>(Reader<Buf>& r,Cut_Type(*)()){
@@ -369,5 +369,5 @@ namespace PROJECT_NAME{
     template<class Buf>
     auto& operator>>(Reader<Buf>&& r,Cut_Type(*)()){
         return r;
-    }
+    }*/
 }

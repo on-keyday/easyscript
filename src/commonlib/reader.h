@@ -12,6 +12,14 @@
 #if __cplusplus > 201703L && __has_include(<concepts>)
 #include<concepts>
 #endif
+#if __cplusplus >= 201703L
+#define CONSTEXPRIF constexpr
+#else
+#define CONSTEXPRIF
+#endif
+#if defined(_MSC_VER)&&!defined(__clang__)&&!defined(__GNUC__)
+#define COMMONLIB2_IS_MSVC
+#endif
 
 namespace PROJECT_NAME{
 
@@ -194,7 +202,7 @@ namespace PROJECT_NAME{
         } 
 
         template<class Func>
-        bool invoke_not_expect(Func& not_expect,Buf& b,size_t ofs){
+        bool invoke_not_expect(Func&& not_expect,Buf& b,size_t ofs){
             return not_expect(b[ofs]);
         }
 
@@ -203,7 +211,7 @@ namespace PROJECT_NAME{
         }
 
         template<class Str,class NotExpect,class Cmp>
-        size_t ahead_detail(Str& str,NotExpect not_expect,Cmp cmp){
+        size_t ahead_detail(Str& str,NotExpect&& not_expect,Cmp&& cmp){
             //if(!cmp)return 0;
             if(!ignore())return 0;
             size_t i=0;
@@ -213,25 +221,26 @@ namespace PROJECT_NAME{
                 if(!cmp(buf[pos+i],str[i]))return 0;
             }
             if(i==0)return 0;
-            if(invoke_not_expect(not_expect,buf,pos+i))return 0;
+            if(invoke_not_expect(std::forward<NotExpect>(not_expect),buf,pos+i))return 0;
             return i;
         }
 
         template<class Str,class NotExpect,class Cmp>
-        inline size_t ahead_check(Str& str,NotExpect nexp,Cmp cmp){
-            return ahead_detail(str,nexp,cmp); 
+        inline size_t ahead_check(Str& str,NotExpect&& nexp,Cmp&& cmp){
+            return ahead_detail(str,std::forward<NotExpect>(nexp),std::forward<Cmp>(cmp)); 
         }
 
+        /*
         template<class C,class NotExpect,class Cmp>
-        inline size_t ahead_check(const C* str,NotExpect nexp,Cmp cmp){
+        inline size_t ahead_check(const C* str,NotExpect&& nexp,Cmp&& cmp){
             if(!str)return 0;
-            return ahead_detail(str,nexp,cmp); 
-        }
+            return ahead_detail(str,std::forward<NotExpect>(nexp),std::forward<Cmp>(cmp)); 
+        }*/
 
         template<class C,class NotExpect,class Cmp>
-        inline size_t ahead_check(C* str,NotExpect nexp,Cmp cmp){
+        inline size_t ahead_check(C* str,NotExpect&& nexp,Cmp&& cmp){
             if(!str)return 0;
-            return ahead_detail(str,nexp,cmp); 
+            return ahead_detail(str,std::forward<NotExpect>(nexp),std::forward<Cmp>(cmp)); 
         }
 
         void copy(const Reader& from){
@@ -255,6 +264,8 @@ namespace PROJECT_NAME{
     public:
         using char_type=Char;
         using buf_type=Buf;
+
+
         Reader(const Reader& from):buf(from.buf){
             copy(from);
         }
@@ -287,29 +298,22 @@ namespace PROJECT_NAME{
             buf=std::forward<Buf>(from.buf);
             move(std::forward<Reader>(from));
             return *this;
+        }
+#ifdef COMMONLIB2_IS_MSVC
+    private:
+#define ahead ahead_internal
+#define expect expect_internal
+#define expectp expectp_internal
+#endif 
+
+        template<class Str,class NotExpect=not_expect_default,class Cmp=cmp_default>
+        size_t ahead(Str& str,NotExpect&& not_expect=NotExpect(),Cmp&& cmp=std::move(default_cmp)){
+            return ahead_check(str,std::forward<NotExpect>(not_expect),std::forward<Cmp>(cmp));
         } 
 
         template<class Str,class NotExpect=not_expect_default,class Cmp=cmp_default>
-        size_t ahead(Str& str,NotExpect not_expect=NotExpect(),Cmp cmp=default_cmp){
-            return ahead_check(str,not_expect,cmp);
-        }
-
-        /*
-        template<class C,class NotExpect=not_expect_default,class Cmp=cmp_default>
-        size_t ahead(const C* str,NotExpect not_expect=NotExpect(),Cmp cmp=default_cmp){
-            if(!str)return false;
-            return ahead_detail(str,not_expect,cmp);
-        }
-
-        template<class C,class NotExpect=not_expect_default,class Cmp=cmp_default>
-        size_t ahead(C* str,NotExpect not_expect=NotExpect(),Cmp cmp=default_cmp){
-            if(!str)return false;
-            return ahead_detail(str,not_expect,cmp);
-        }*/
-        
-        template<class Str,class NotExpect=not_expect_default,class Cmp=cmp_default>
-        bool expect(Str& str,NotExpect not_expect=NotExpect(),Cmp cmp=default_cmp){
-            auto size=ahead(str,not_expect,cmp);
+        bool expect(Str& str,NotExpect&& not_expect=NotExpect(),Cmp&& cmp=std::move(default_cmp)){
+            auto size=ahead(str,std::forward<NotExpect>(not_expect),std::forward<Cmp>(cmp));
             if(size==0)return false;
             pos+=size;
             ignore();
@@ -317,20 +321,42 @@ namespace PROJECT_NAME{
         }
 
         template<class Str,class Ctx,class NotExpect=not_expect_default,class Cmp=cmp_default>
-        bool expectp(Str& str,Ctx& ctx,NotExpect not_expect=NotExpect(),Cmp cmp=default_cmp){
-            if(expect<Str,NotExpect,Cmp>(str,not_expect,cmp)){
+        bool expectp(Str& str,Ctx& ctx,NotExpect&& not_expect=NotExpect(),Cmp&& cmp=std::move(default_cmp)){
+            if(expect<Str,NotExpect,Cmp>(str,std::forward<NotExpect>(not_expect),std::forward<Cmp>(cmp))){
                 ctx=str;
                 return true;
             }
             return false;
         }
 
+#ifdef COMMONLIB2_IS_MSVC
+#undef ahead
+#undef expect
+#undef expectp
+    public:
+        template<class Str,class NotExpect=not_expect_default,class Cmp=cmp_default>
+        size_t ahead(Str& str,NotExpect not_expect=NotExpect(),Cmp cmp=default_cmp){
+            return ahead_internal(str,std::forward<NotExpect>(not_expect),std::forward<Cmp>(cmp));
+        }
+
+        template<class Str,class NotExpect=not_expect_default,class Cmp=cmp_default>
+        bool expect(Str& str,NotExpect not_expect=NotExpect(),Cmp cmp=default_cmp){
+            return expect_internal(str,std::forward<NotExpect>(not_expect),std::forward<Cmp>(cmp));
+        }
+        
+        template<class Str,class Ctx,class NotExpect=not_expect_default,class Cmp=cmp_default>
+        bool expectp(Str& str,Ctx& ctx,NotExpect not_expect=NotExpect(),Cmp cmp=default_cmp){
+            return expectp_internal(str,ctx,std::forward<NotExpect>(not_expect),std::forward<Cmp>(cmp));
+        }
+#endif
+
         Char achar() const{
             return offset(0);
         }
 
         bool seek(size_t p,bool strict=false){
-            if(auto sz=buf_size(buf);sz<p){
+            auto sz=buf_size(buf);
+            if(sz<p){
                 if(strict)return false;
                 p=sz;
             }
@@ -379,7 +405,7 @@ namespace PROJECT_NAME{
 
         size_t readable() {
             if(eof())return 0;
-            return buf.size()-pos;
+            return buf_size(buf)-pos;
         }
 
         IgnoreHandler set_ignore(IgnoreHandler hander){
@@ -432,7 +458,7 @@ namespace PROJECT_NAME{
         static bool read_string(Reader* self,Ret& buf,bool*& noline,bool begin){
             if(!self)return false;
             if(begin){
-                if(self->achar()!=(Char)'\''&&self->achar()!=(Char)'"'&&self->achar()!='`')return false;
+                if(self->achar()!=(Char)'\''&&self->achar()!=(Char)'"'&&self->achar()!=(Char)'`')return false;
                 buf.push_back(self->achar());
                 self->increment();
                 //ctx=self->set_ignore(nullptr);

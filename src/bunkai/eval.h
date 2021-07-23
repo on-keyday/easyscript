@@ -34,7 +34,7 @@ namespace eval{
             opcase(op_logicaland,&&)
             default:break;
             }
-            if constexpr(!std::is_floating_point_v<E>){
+            if CONSTEXPRIF (!std::is_floating_point_v<E>){
                 switch (kind)
                 {
                 opcase(op_shl,<<)

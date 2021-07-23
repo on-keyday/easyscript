@@ -323,15 +323,15 @@ namespace PROJECT_NAME{
         return false;
     }
 
-    bool is_utf16_surrogate_high(unsigned short C){
+    inline bool is_utf16_surrogate_high(unsigned short C){
         return 0xD800<=C&&C<=0xDC00;
     }
 
-    bool is_utf16_surrogate_low(unsigned short C){
+    inline bool is_utf16_surrogate_low(unsigned short C){
        return 0xDC00 <= C && C < 0xE000;
     }
 
-    char32_t make_surrogate_char(unsigned short first,unsigned short second){
+    inline char32_t make_surrogate_char(unsigned short first,unsigned short second){
         return 0x10000 + (first - 0xD800) * 0x400 +(second - 0xDC00);
     }
 

@@ -267,6 +267,18 @@ namespace PROJECT_NAME{
             );
         }
 
+        HANDLE get_handle(const wchar_t* name){
+            return CreateFileW(
+                name,
+                GENERIC_READ,
+                FILE_SHARE_READ,
+                NULL,
+                OPEN_EXISTING,
+                FILE_ATTRIBUTE_NORMAL,
+                NULL
+            );
+        }
+
         bool get_map(HANDLE tmp,size_t tmpsize){
             HANDLE tmpm=CreateFileMappingA(tmp,NULL,PAGE_READONLY,0,0,NULL);
             if(tmpm==NULL){
@@ -285,7 +297,8 @@ namespace PROJECT_NAME{
             return true;
         }
 
-        bool open_detail(const char* in){
+        template<class C>
+        bool open_detail(const C* in){
             auto tmp=get_handle(in);
             if(tmp==INVALID_HANDLE_VALUE){
                 return false;
@@ -437,6 +450,11 @@ namespace PROJECT_NAME{
             open(name);
         }
 
+#ifdef _WIN32
+        FileMap(const wchar_t* name){
+            open(name);
+        }
+#endif
 
         ~FileMap(){
             close();
@@ -464,7 +482,12 @@ namespace PROJECT_NAME{
             if(!name)return false;
             return open_detail(name);
         }
-
+#ifdef _WIN32
+        bool open(const wchar_t* name){
+            if(!name)return false;
+            return open_detail(name);
+        }
+#endif
         bool close(){
             return close_detail();
         }
@@ -480,6 +503,10 @@ namespace PROJECT_NAME{
 
         const char* c_str() const{
             return place;
+        }
+
+        bool is_open()const{
+            return place!=nullptr;
         }
     };
 #ifdef _fileno

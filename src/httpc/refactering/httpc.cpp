@@ -45,6 +45,7 @@ template<class Buf>
 using Cmd=typename CmdLine<Buf>::command_type;
 
 enum class LoggerMode{
+    none=0,
     std_out=0x1,
     std_err=0x2,
     both=std_out|std_err,
@@ -384,7 +385,8 @@ Cmd<Buf>* SetCommand(CmdLine<Buf>& ctx,bool set_logout=false){
         {"-nobody-show","n",false,optf,"not print body"},
         {"-custom-header","h",true,OptFlag::none,"set custom header"},
         {"-auto-redirect","a",false,optf,"set auto redirect"},
-        {"-show-all-header","S",false,optf,"show all header"}
+        {"-show-all-header","S",false,optf,"show all header"},
+        {"-save-if-succeed","u",false,optf,"save output file is succeed"}
     });
     constexpr auto flag=CmdFlag::invoke_parent|CmdFlag::use_parentopt|CmdFlag::use_parentcb|
     CmdFlag::take_over_prev_run|CmdFlag::ignore_invalid_option;
@@ -478,27 +480,40 @@ int http(const Arg<Buf>& arg,int prev,int pos){
         PrintSummay<Buf>(arg,ctx);
         anyshown=true;
     }
+    auto succeed=[&]{
+        return ctx->client->statuscode()>=200&&ctx->client->statuscode()<300;
+    };
+    bool saveif=false;
+    if(arg.exists_option("-save-if-succeed",true)){
+        saveif=true;
+    }
     if(arg.get_optarg(opt,"-output-file",0,true)){
+        if(!saveif||succeed()){
 #ifdef _WIN32
-        std::wstring path;
-        StrStream(opt) >> u16filter >> path;
+            std::wstring path;
+            StrStream(opt) >> u16filter >> path;
 #else
-        std::string path=std::move(opt);
+            std::string path=std::move(opt);
 #endif
-        std::ofstream ofs(path.c_str(),std::ios_base::binary);
-        if(ofs.is_open()){
-            ofs<<ctx->client->body();
-            arg.log(logger,"content was saved to ",opt.c_str());
+            std::ofstream ofs(path.c_str(),std::ios_base::binary);
+            if(ofs.is_open()){
+                ofs<<ctx->client->body();
+#ifdef _WIN32
+                opt="";
+                StrStream(path) >> utffilter >> opt; 
+#endif
+                arg.log(logger,"content was saved to ",opt.c_str());
+            }
+            else{
+                arg.log(logger,"warning:file '",opt.c_str(),"' not opened");
+            }
+            anyshown=true;
         }
-        else{
-            arg.log(logger,"warning:file '",opt.c_str(),"' not opened");
-        }
-        anyshown=true;
     }
     if(!anyshown){
         arg.log(logger,"operation succeeded");
     }
-    if(ctx->client->statuscode()>=200&&ctx->client->statuscode()<300)return 0;
+    if(succeed())return 0;
     return ctx->client->statuscode();
 }
 
@@ -538,11 +553,19 @@ int command_impl(ArgVWrapper<char>&& input){
    return argv_command(std::forward<ArgVWrapper<char>>(input));
 }
 
-int command(const char* input){
+int command(const char* input,int internal){
+    if(internal){
+        logger.set_mode(LoggerMode::none);
+        errorlog.set_mode(LoggerMode::none);
+    }
     return command_impl<std::string>(std::string(input));
 }
 
-int command_wchar(const wchar_t* input){
+int command_wchar(const wchar_t* input,int internal){
+    if(internal){
+        logger.set_mode(LoggerMode::none);
+        errorlog.set_mode(LoggerMode::none);
+    }
     return command_impl<ToUTF8<std::wstring>>(std::wstring(input));
 }
 

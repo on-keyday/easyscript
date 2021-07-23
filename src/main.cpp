@@ -11,7 +11,6 @@
 #include<map>
 #include<iostream>
 #include"easyscript/script.h"
-#include"hardscript/hardtest.h"
 #include"bunkai/ast.h"
 #include<fileio.h>
 #include<charconv>
@@ -20,8 +19,9 @@
 #include<utf_helper.h>
 #include<utfreader.h>
 #include<extension_operator.h>
-#include<cmdline_ctx.h>
 #include<set>
+#include<extutil.h>
+#include<learnstd.h>
 
 using namespace PROJECT_NAME;
 using strreader=Reader<std::string>;
@@ -217,10 +217,9 @@ void test4(){
     v.decrement();
     bool res7=v.expect("!");
     v.seek(0);
-    bool res8=v.expect(u"𠮷");
-
-    
+    bool res8=v.expect(u"𠮷");   
 }
+
 
 int main(int argc,char** argv){
     auto script=make_script();
@@ -237,11 +236,11 @@ int main(int argc,char** argv){
     //hardtest();
     //auto ret=netclient_argv(argc,argv);
 
-    //test1();
-    //test2();
-    //auto r=test3();
-    //r.expect(u"下");
-    test4();
-    ast::check_assert();
+
+    Reader<Reverse<ToUTF32<std::string>>> s=Reverse(ToUTF32(std::string((const char*)u8"adakaraしんぶんし")));
+    auto exp=s.expect(U"しんぶんし");
+    auto exp2= s.expect("arakada");
+    std::cout << exp << exp2;
     return 0;
 }
+

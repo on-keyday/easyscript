@@ -57,6 +57,15 @@ namespace PROJECT_NAME{
         size_t size_cache=0;
         mutable size_t prevpos=0;
         mutable char samepos_cache=0;
+
+        void open_file(FILE** pfp,const char* name){
+            fopen_s(pfp,name,"rb");
+        }
+#ifdef _WIN32
+        void open_file(FILE** pfp,const wchar_t* name){
+            _wfopen_s(pfp,name,L"rb");
+        }
+#endif
     public:
 
         FileInput(){}
@@ -76,7 +85,8 @@ namespace PROJECT_NAME{
             in.samepos_cache=0;
         }
 
-        FileInput(const char* filename){
+        template<class C>
+        FileInput(C* filename){
             open(filename);
         }
 
@@ -95,10 +105,11 @@ namespace PROJECT_NAME{
             return true;
         }
 
-        bool open(const char* filename){
+        template<class C>
+        bool open(C* filename){
             if(!filename)return false;
             FILE* tmp=nullptr;
-            fopen_s(&tmp,filename,"rb");
+            open_file(&tmp,filename);
             if(!tmp)return false;
             auto fd=_fileno(tmp);
             if(!getfilesizebystat(fd,size_cache)){
@@ -152,6 +163,10 @@ namespace PROJECT_NAME{
             }
             samepos_cache=(char)c;
             return c;
+        }
+
+        bool is_open(){
+            return file!=nullptr;
         }
     };
 
@@ -248,6 +263,7 @@ namespace PROJECT_NAME{
 
         HANDLE file=INVALID_HANDLE_VALUE;
         HANDLE maph=nullptr;
+        int err=0;
 
         HANDLE fp_to_native(FILE* fp){
             int fd=_fileno(fp);
@@ -282,10 +298,12 @@ namespace PROJECT_NAME{
         bool get_map(HANDLE tmp,size_t tmpsize){
             HANDLE tmpm=CreateFileMappingA(tmp,NULL,PAGE_READONLY,0,0,NULL);
             if(tmpm==NULL){
+                err=GetLastError();
                 return false;
             }
             char* rep=(char*)MapViewOfFile(tmpm,FILE_MAP_READ,0,0,0);
             if(!rep){
+                err=GetLastError();
                 CloseHandle(tmpm);
                 return false;
             }
@@ -512,6 +530,147 @@ namespace PROJECT_NAME{
 #ifdef _fileno
 #undef _fileno
 #endif
+
+    struct FileWriter{
+    private:
+        FILE* fp=nullptr;
+    public:
+        FileWriter(const char* path,bool add=false){
+            open(path,add);
+        }
+        bool open(const char* path,bool add=false){
+            FILE* tmp=nullptr;
+            fopen_s(&tmp,path,add?"ab":"wb");
+            if(!tmp){
+                return false;
+            }
+            close();
+            fp=tmp;
+            return true;
+        }
+
+        bool close(){
+            if(fp){
+                ::fclose(fp);
+                fp=nullptr;
+            }
+            return true;
+        }
+
+        template<class C>
+        bool write(C* byte,size_t size){
+            if(!is_open())return false;
+            if(::fwrite(byte,sizeof(C),size,fp)<size){
+                return false;
+            }
+            return true;
+        }
+
+        template<class T>
+        bool write(const T& t){
+            return write((const char*)&t,sizeof(T));
+        }
+
+        template<class T>
+        void push_back(const T& t){
+            write(t);
+        }
+
+        bool is_open()const{
+            return fp!=nullptr;
+        }
+    };
+
+    struct FileReader{
+        FileInput* input=nullptr;
+        FileMap* map=nullptr; 
+
+        template<class C>
+        FileReader(C* in){
+            open(in);
+        }
+
+        ~FileReader()noexcept{
+            close();
+        }
+
+        FileReader(FileReader&& in){
+            close();
+            input=in.input;
+            in.input=nullptr;
+            map=in.map;
+            in.map=nullptr;
+        }
+
+        template<class C>
+        bool open_input(C* name){
+            FileInput in=name;
+            if(!in.is_open()){
+                return false;
+            }
+            close();
+            input=new FileInput(std::move(in));
+            return true;
+        }
+
+        template<class C>
+        bool open_map(C* name){
+            FileMap in=name;
+            if(!in.is_open()){
+                return false;
+            }
+            close();
+            map=new FileMap(std::move(in));
+            return true;
+        }
+
+        template<class C>
+        bool open(C* name){
+            return open_map(name)||open_input(name);
+        }
+
+        bool close(){
+            if(input){
+                input->close();
+                delete input;
+                input=nullptr;
+            }
+            else if(map){
+                map->close();
+                delete map;
+                map=nullptr;
+            }
+            return true;
+        }
+
+        char operator[](size_t pos)const{
+            if(input){
+                return input->operator[](pos);
+            }
+            else if(map){
+                return map->operator[](pos);
+            }
+            return char();
+        }
+
+        size_t size()const{
+            if(input){
+                return input->size();
+            }
+            else if(map){
+                return map->size();
+            }
+            return 0;
+        }
+
+        bool is_open()const{
+            return input||map;
+        }
+
+        bool use_filemap()const{
+            return map!=nullptr;
+        }
+    };
 
 #ifdef _WIN32
 

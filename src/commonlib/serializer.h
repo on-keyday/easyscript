@@ -11,7 +11,6 @@ namespace PROJECT_NAME{
         Buf serialized;
 
         using RBuf=std::remove_reference_t<Buf>;
-        static_assert(bcsizeeq<RBuf,1>,"buffer must be byte sequence");
 
     public:    
 
@@ -86,7 +85,7 @@ namespace PROJECT_NAME{
             }
         }
 
-        RBuf& get()const{
+        RBuf& get(){
             return serialized;
         }
     };
@@ -191,6 +190,10 @@ namespace PROJECT_NAME{
 
         bool eof()const{
             return r.ceof();
+        }
+
+        Reader<Hold>& base_reader(){
+            return r;
         }
     };
     

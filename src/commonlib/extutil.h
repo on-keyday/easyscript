@@ -48,7 +48,7 @@ namespace PROJECT_NAME{
     }
 
     template<class Str=std::string,class Buf,class Token=Str,class Vec=std::vector<Str>>
-    Vec split(Reader<Buf>& r,const Token& token,size_t n=(size_t)-1){
+    Vec split(Reader<Buf>& r,const Token& token,size_t n=(size_t)-1,bool needafter=true){
         Vec ret;
         size_t count=0;
         while(!r.ceof()&&count<n){
@@ -60,7 +60,7 @@ namespace PROJECT_NAME{
             ret.push_back(std::move(str));
             count++;
         }
-        if(!r.ceof()){
+        if(needafter&&!r.ceof()){
             Str str;
             r >> do_nothing<b_char_type<Buf>> >> str;
             ret.push_back(std::move(str));
@@ -69,13 +69,13 @@ namespace PROJECT_NAME{
     }
 
     template<class Str=std::string,class Token=Str,class Vec=std::vector<Str>>
-    Vec split(const Str& str,const Token& token,size_t n=(size_t)-1){
+    Vec split(const Str& str,const Token& token,size_t n=(size_t)-1,bool needafter=true){
         Reader<Refer<const Str>> r(str);
         return split<Str,Refer<const Str>,Token,Vec>(r,token,n);
     }
 
     template<class C,class Token,class Buf=std::basic_string<C>,class Vec=std::vector<Buf>>
-    Vec split(const C* str,const Token& token,size_t n=(size_t)-1){
+    Vec split(const C* str,const Token& token,size_t n=(size_t)-1,bool needafter=true){
         return split<Buf,Token,Vec>(Buf(str),token,n);
     }
 

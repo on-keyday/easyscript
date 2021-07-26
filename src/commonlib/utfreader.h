@@ -23,7 +23,7 @@ namespace PROJECT_NAME{
         }
 
         template<class Func>
-        size_t count(Func func,size_t pos=0)const{
+        size_t count(Func func)const{
             r.seek(0);
             size_t c=0;
             while(!r.ceof()){
@@ -33,7 +33,7 @@ namespace PROJECT_NAME{
                 }
                 c++;
             }
-            r.seek(pos);
+            //r.seek(pos);
             return c;
         }
 
@@ -69,11 +69,11 @@ namespace PROJECT_NAME{
             return chache;
         }
 
-        size_t reset(size_t pos=0){
+        size_t reset(){
             err=false;
             r.seek(0);
             auto ret=count();
-            r.seek(pos);
+            r.seek(0);
             return ret;
         }
 
@@ -218,11 +218,11 @@ namespace PROJECT_NAME{
         }
 
         template<class Func>
-        size_t reset(Func func,size_t pos=0){
+        size_t reset(Func func){
             err=false;
             r.seek(0);
             auto ret=count(func);
-            r.seek(pos);
+            //r.seek(pos);
             return ret;
         }
 
@@ -381,8 +381,8 @@ namespace PROJECT_NAME{
             return impl.base_reader();\
         }\
         \
-        bool reset(size_t pos=0){\
-            _size=impl.reset(INCR,pos);\
+        bool reset(){\
+            _size=impl.reset(INCR);\
             return impl.err;\
         }\
         \

@@ -10,7 +10,6 @@
 #include"serializer.h"
 
 
-
 namespace PROJECT_NAME{
 
     struct Decomposition{
@@ -35,8 +34,10 @@ namespace PROJECT_NAME{
             }v3_S;
             long long v3_L=-1;
         };
+        //std::string v3_str;
 
-        std::string stringify()const{
+        std::string stringify(){
+            if(!flag)return "";
             std::string ret;
             ret=(flag&signbit?"-":"");
             if(flag&large_numbit){
@@ -66,6 +67,7 @@ namespace PROJECT_NAME{
             if(flag&signbit){
                 ret=-ret;
             }
+            return ret;
         }
     };
 
@@ -81,6 +83,7 @@ namespace PROJECT_NAME{
         std::string category;
         unsigned int ccc=0; //Canonical_Combining_Class
         std::string bidiclass;
+        std::string east_asian_wides;
         Decomposition decomposition;
         Numeric numeric;
         bool mirrored=false;
@@ -98,6 +101,7 @@ namespace PROJECT_NAME{
         std::multimap<std::string,CodeInfo*> names;
         std::multimap<std::string,CodeInfo*> categorys;
         std::vector<CodeRange> ranges;
+        std::multimap<std::u32string,CodeInfo*> composition;
     };
 
     inline void parse_case(std::vector<std::string>& d,CaseMap& ca){
@@ -172,6 +176,25 @@ namespace PROJECT_NAME{
         parse_real(d[8],info.numeric);
     }
 
+    inline void guess_east_asian_wide(CodeInfo& info){
+        if(info.decomposition.command=="<wide>"){
+            info.east_asian_wides="F";
+        }
+        else if(info.decomposition.command=="<narrow>"){
+            info.east_asian_wides="H";
+        }
+        else if(info.name.find("CJK")!=~0||info.name.find("HIRAGANA")!=~0||
+                info.name.find("KATAKANA")!=~0){
+            info.east_asian_wides="W";
+        }
+        else if(info.name.find("GREEK")!=~0){
+            info.east_asian_wides="A";
+        }
+        else{
+            info.east_asian_wides="U";
+        }
+    }
+
     inline bool parse_codepoint(std::vector<std::string>& d,CodeInfo& info){
         if(d.size()<14)return false;
         unsigned int codepoint=(unsigned int)-1;
@@ -186,6 +209,7 @@ namespace PROJECT_NAME{
         if(d[9]!="Y"&&d[9]!="N")return false;
         info.mirrored=d[9]=="Y"?true:false;
         parse_case(d,info.casemap);
+        guess_east_asian_wide(info);
         return true;
     }
 
@@ -200,6 +224,9 @@ namespace PROJECT_NAME{
                 info.range=prev;
                 prev->range=&point;
             }
+        }
+        if(info.decomposition.to.size()){
+            ret.composition.emplace(info.decomposition.to,&point);
         }
         point=std::move(info);
         prev=&point;
@@ -220,7 +247,7 @@ namespace PROJECT_NAME{
 
 
     template<class C>
-    std::vector<std::vector<std::string>> load_unicodedata_text(C* name){
+    std::vector<std::vector<std::string>> load_EastAsianWide_text(C* name){
         Reader<FileReader> r(name);
 
         if(!r.ref().is_open()){
@@ -229,17 +256,81 @@ namespace PROJECT_NAME{
 
         auto each=lines(r,false);
         
+        std::erase_if(each,[](auto& i){
+            if(i[0]=='#'){
+                return true;
+            }
+            for(auto& e:i){
+                if(e!=' '&&e!='\t'){
+                    return false;
+                }
+            }
+            return true;
+        });
+
         std::vector<std::vector<std::string>> ret;
 
         for(auto& i:each){
-            ret.push_back(split(i,";"));
+            auto v=split(i,";",1);
+            auto v2=split(v[1]," ",1,false);
+            ret.push_back({v[0],v2[0]});
         }
 
         return ret;
     }
 
+    inline bool apply_east_asian_wide(std::vector<std::vector<std::string>>& vec,UnicodeData& data){
+        for(auto& e:vec){
+            if(e.size()!=2)return false;
+            auto code=split(e[0],"..");
+            if(code.size()==0)return false;
+            if(code.size()==1){
+                unsigned int c=0;
+                Reader("0x"+code[0])>> c;
+                if(auto found=data.codes.find(c);found!=data.codes.end()){
+                    CodeInfo& info=(*found).second;
+                    info.east_asian_wides=e[1];
+                }
+            }
+            else if(code.size()==2){
+                unsigned int first=0,last=0;
+                Reader("0x"+code[0])>>first;
+                Reader("0x"+code[1])>>last;
+                for(auto i=first;i<=last;i++){
+                    if(auto found=data.codes.find(i);found!=data.codes.end()){
+                        CodeInfo& info=(*found).second;
+                        info.east_asian_wides=e[1];
+                    }
+                }
+            }
+        }
+        return true;
+    }
+
+    template<class C>
+    std::vector<std::vector<std::string>> load_unicodedata_text(C* name){
+        Reader<FileReader> r(name);
+
+        if(!r.ref().is_open()){
+            return std::vector<std::vector<std::string>>();
+        }
+        auto each=lines(r,false);
+        
+        std::vector<std::vector<std::string>> ret;
+
+        for(auto& i:each){
+            ret.push_back(split(i,";"));
+        }
+        return ret;
+    }
+
+    constexpr int enable_version=2;
+
     template<class Buf>
-    void serialize_codeinfo(Serializer<Buf> w,CodeInfo& info,int version=1){
+    bool serialize_codeinfo(Serializer<Buf> w,CodeInfo& info,int version=enable_version){
+        if(version>enable_version){
+            return false;
+        }
         w.write_hton(info.codepoint);
         w.template write_as<char>(info.name.size());
         w.write_byte(info.name);
@@ -260,7 +351,7 @@ namespace PROJECT_NAME{
             w.template write_as<char>(str.size());
             w.write_byte(str);
         }
-        else if(version==1){
+        else if(version>=1){
             w.write(info.numeric.flag);
             if(info.numeric.flag&large_numbit){
                 w.write_hton(info.numeric.v3_L);
@@ -278,10 +369,18 @@ namespace PROJECT_NAME{
         w.write_hton(info.casemap.upper);
         w.write_hton(info.casemap.lower);
         w.write_hton(info.casemap.title);
+        if(version>=2){
+            w.template write_as<unsigned char>(info.east_asian_wides.size());
+            w.write_byte(info.east_asian_wides);
+        }
+        return true;
     }
 
     template<class Buf>
-    bool deserialize_codeinfo(Deserializer<Buf>& r,CodeInfo& info,int version=1){
+    bool deserialize_codeinfo(Deserializer<Buf>& r,CodeInfo& info,int version=enable_version){
+        if(version>enable_version){
+            return false;
+        }
         if(!r.read_reverse(info.codepoint))return false;
         size_t size=0;
         if(!r.template read_as<unsigned char>(size))return false;
@@ -307,7 +406,7 @@ namespace PROJECT_NAME{
             if(!r.read_byte(str,size))return false;
             parse_real(str,info.numeric);
         }
-        else if(version==1){
+        else if(version>=1){
             if(info.numeric.flag&large_numbit){
                 if(!r.read_ntoh(info.numeric.v3_L)){
                     return false;
@@ -331,13 +430,23 @@ namespace PROJECT_NAME{
         if(!r.read_ntoh(info.casemap.upper))return false;
         if(!r.read_ntoh(info.casemap.lower))return false;
         if(!r.read_ntoh(info.casemap.title))return false;
+        if(version>=2){
+            if(!r.template read_as<unsigned char>(size))return false;
+            if(!r.read_byte(info.east_asian_wides,size))return false;
+        }
+        else{
+            guess_east_asian_wide(info);
+        }
         return true;
     }
 
     template<class Buf>
-    void serialize_unicodedata(Serializer<Buf>& ret,UnicodeData& data,int version=1){
+    void serialize_unicodedata(Serializer<Buf>& ret,UnicodeData& data,int version=enable_version){
         if(version==1){
             ret.write_byte("UDv1",4);
+        }
+        else if(version==2){
+            ret.write_byte("UDv2",4);
         }
         for(auto& d:data.codes){
             serialize_codeinfo(ret,d.second,version);
@@ -349,6 +458,9 @@ namespace PROJECT_NAME{
         int version=0;
         if(r.base_reader().expect("UDv1")){
             version=1;
+        }
+        else if(r.base_reader().expect("UDv2")){
+            version=2;
         }
         CodeInfo* prev=nullptr;
         while(!r.eof()){

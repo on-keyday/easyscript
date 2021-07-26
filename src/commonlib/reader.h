@@ -9,16 +9,8 @@
 #include<cstddef>
 #include<utility>
 
-#if __cplusplus > 201703L && __has_include(<concepts>)
+#ifdef COMMONLIB2_HAS_CONCEPTS
 #include<concepts>
-#endif
-#if __cplusplus >= 201703L
-#define CONSTEXPRIF constexpr
-#else
-#define CONSTEXPRIF
-#endif
-#if defined(_MSC_VER)&&!defined(__clang__)&&!defined(__GNUC__)
-#define COMMONLIB2_IS_MSVC
 #endif
 
 namespace PROJECT_NAME{

@@ -1,5 +1,5 @@
+#pragma once
 #include"project_name.h"
-#include<functional>
 
 namespace PROJECT_NAME{
     //以下stdの実装模倣

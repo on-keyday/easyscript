@@ -12,13 +12,13 @@ namespace PROJECT_NAME{
     auto& output_number(Reader<Buf>&& r,T& out){
         std::string buf;
         bool minus=false;
-        if CONSTEXPRIF (std::is_signed_v<T>){
+        if CONSTEXPRIF (std::is_signed<T>::value){
             if(r.expect("-")){
                 minus=true;
             }
         }
         NumberContext<b_char_type<Buf>> ctx;
-        if CONSTEXPRIF (std::is_integral_v<T>){
+        if CONSTEXPRIF (std::is_integral<T>::value){
             ctx.flag|=NumberFlag::only_int;
         }
         r.readwhile(buf,number,&ctx);
@@ -30,10 +30,10 @@ namespace PROJECT_NAME{
         if(minus){
             buf="-"+buf;
         }
-        if CONSTEXPRIF (std::is_integral_v<T>){
+        if CONSTEXPRIF (std::is_integral<T>::value){
             parse_int(buf,out,ctx.radix);
         }
-        else if CONSTEXPRIF(std::is_floating_point_v<T>){
+        else if CONSTEXPRIF(std::is_floating_point<T>::value){
             parse_float(buf,out,ctx.radix==16);
         }
         return r;
@@ -68,45 +68,73 @@ namespace PROJECT_NAME{
     inline constexpr bool bcsizeeq=size==b_char_size_v<Buf>;*/
 
     template<class Buf,class Str>
-    auto& output_str(Reader<std::enable_if_t<bcsizeeq<Buf,1>,Buf>>&& r,Str& str){
-        if CONSTEXPRIF(bcsizeeq<Str,1>){
+    auto& output_str(Reader<std::enable_if_t<bcsizeeq<Buf,1>,Buf>>&& r,std::enable_if_t<bcsizeeq<Str,1>,Str>& str){
+        //if CONSTEXPRIF(bcsizeeq<Str,1>){
             str.reserve(r.readable());
             r.readwhile(str,untilincondition,do_nothing<b_char_type<Buf>>);
-        }
-        else if CONSTEXPRIF(bcsizeeq<Str,2>){
-            int ctx=0;
-            r.readwhile(str,utf8toutf16,&ctx);
-        }
-        else if CONSTEXPRIF(bcsizeeq<Str,4>){
-            int ctx=0;
-            r.readwhile(str,utf8toutf32,&ctx);
-        }
+        //}
+        //else if CONSTEXPRIF(bcsizeeq<Str,2>){
+        //    int ctx=0;
+        //    r.readwhile(str,utf8toutf16,&ctx);
+        //}
+        //else if CONSTEXPRIF(bcsizeeq<Str,4>){
+        //    int ctx=0;
+        //    r.readwhile(str,utf8toutf32,&ctx);
+        //}
         return r;
     }
 
     template<class Buf,class Str>
-    auto& output_str(Reader<std::enable_if_t<bcsizeeq<Buf,2>,Buf>>&& r,Str& str){
-        if CONSTEXPRIF(bcsizeeq<Str,1>){
+    auto& output_str(Reader<std::enable_if_t<bcsizeeq<Buf,1>,Buf>>&& r,std::enable_if_t<bcsizeeq<Str,2>,Str>& str){
+        int ctx=0;
+        r.readwhile(str,utf8toutf16,&ctx);
+        return r;
+    }
+
+    template<class Buf,class Str>
+    auto& output_str(Reader<std::enable_if_t<bcsizeeq<Buf,1>,Buf>>&& r,std::enable_if_t<bcsizeeq<Str,4>,Str>& str){
+        int ctx=0;
+        r.readwhile(str,utf8toutf32,&ctx);
+        return r;
+    }
+
+    template<class Buf,class Str>
+    auto& output_str(Reader<std::enable_if_t<bcsizeeq<Buf,2>,Buf>>&& r,std::enable_if_t<bcsizeeq<Str,1>,Str>& str){
+        //if CONSTEXPRIF(bcsizeeq<Str,1>){
             int ctx=0;
             r.readwhile(str,utf16toutf8,&ctx);
-        }
-        else if CONSTEXPRIF(bcsizeeq<Str,2>){
-            str.reserve(r.readable());
-            r.readwhile(str,untilincondition,do_nothing<b_char_type<Buf>>);
-        }
-        else if CONSTEXPRIF(bcsizeeq<Str,4>){
-            int ctx=0;
-            r.readwhile(str,utf16toutf32,&ctx);
-        }
+        //}
+        //else if CONSTEXPRIF(bcsizeeq<Str,2>){
+        //    str.reserve(r.readable());
+        //    r.readwhile(str,untilincondition,do_nothing<b_char_type<Buf>>);
+        //}
+        //else if CONSTEXPRIF(bcsizeeq<Str,4>){
+        //    int ctx=0;
+        //    r.readwhile(str,utf16toutf32,&ctx);
+        //}
         return r;
     }
 
     template<class Buf,class Str>
-    auto& output_str(Reader<std::enable_if_t<bcsizeeq<Buf,4>,Buf>>&& r,Str& str){
-        if CONSTEXPRIF(bcsizeeq<Str,1>){
+    auto& output_str(Reader<std::enable_if_t<bcsizeeq<Buf,2>,Buf>>&& r,std::enable_if_t<bcsizeeq<Str,2>,Str>& str){
+        str.reserve(r.readable());
+        r.readwhile(str,untilincondition,do_nothing<b_char_type<Buf>>);
+        return r;
+    }
+
+    template<class Buf,class Str>
+    auto& output_str(Reader<std::enable_if_t<bcsizeeq<Buf,2>,Buf>>&& r,std::enable_if_t<bcsizeeq<Str,4>,Str>& str){
+        int ctx=0;
+        r.readwhile(str,utf16toutf32,&ctx);
+        return r;
+    }
+
+    template<class Buf,class Str>
+    auto& output_str(Reader<std::enable_if_t<bcsizeeq<Buf,4>,Buf>>&& r,std::enable_if_t<bcsizeeq<Str,1>,Str>& str){
+        //if CONSTEXPRIF(bcsizeeq<Str,1>){
             int ctx=0;
             r.readwhile(str,utf32toutf8,&ctx);
-        }
+        /*}
         else if CONSTEXPRIF(bcsizeeq<Str,2>){
             int ctx=0;
             r.readwhile(str,utf32toutf16,&ctx);
@@ -114,18 +142,33 @@ namespace PROJECT_NAME{
         else if CONSTEXPRIF(bcsizeeq<Str,4>){
             str.reserve(r.readable());
             r.readwhile(str,untilincondition,do_nothing<b_char_type<Buf>>);
-        }
+        }*/
+        return r;
+    }
+
+
+    template<class Buf,class Str>
+    auto& output_str(Reader<std::enable_if_t<bcsizeeq<Buf,4>,Buf>>&& r,std::enable_if_t<bcsizeeq<Str,2>,Str>& str){
+        int ctx=0;
+        r.readwhile(str,utf32toutf16,&ctx);
+        return r;
+    }
+
+    template<class Buf,class Str>
+    auto& output_str(Reader<std::enable_if_t<bcsizeeq<Buf,4>,Buf>>&& r,std::enable_if_t<bcsizeeq<Str,4>,Str>& str){
+        str.reserve(r.readable());
+        r.readwhile(str,untilincondition,do_nothing<b_char_type<Buf>>);
         return r;
     }
 
 
 
-    template<class Buf,class Str,class =std::enable_if_t<!std::is_function_v<Str>,void>>
+    template<class Buf,class Str,class =std::enable_if_t<!std::is_function<Str>::value,void>>
     decltype(auto) operator>>(Reader<Buf>& r,Str& str){
         return output_str<Buf,Str>(std::forward<Reader<Buf>>(r),str);
     }
 
-    template<class Buf,class Str,class =std::enable_if_t<!std::is_function_v<Str>,void>>
+    template<class Buf,class Str,class =std::enable_if_t<!std::is_function<Str>::value,void>>
     decltype(auto) operator>>(Reader<Buf>&& r,Str& str){
         return output_str<Buf,Str>(std::forward<Reader<Buf>>(r),str);
     }
@@ -251,10 +294,20 @@ namespace PROJECT_NAME{
         StrStream(Str&& str):s(str){}
 
         using char_type=b_char_type<Str>;
+    private:
+        template<class T,size_t sz>
+        size_t size(T (&i)[sz]){
+            return sz;
+        }
 
-        template<class OtherStr,class =std::enable_if_t<!std::is_function_v<OtherStr>,void>>
+        template<class T>
+        size_t size(T& in){
+            return in.size();
+        }
+    public:
+        template<class OtherStr,class =std::enable_if_t<!std::is_function<OtherStr>::value,void>>
         StrStream& operator>>(OtherStr& in){
-            in.reserve(std::size(s));
+            in.reserve(size(s));
             for(auto& o:s){
                 in.push_back(o);
             }

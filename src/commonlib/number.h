@@ -67,7 +67,7 @@ namespace PROJECT_NAME{
     template<>
     struct Int<bool>;
 
-    #define DEFINE_INT_OPERATOR(OP,COND,EXC)\
+#define DEFINE_INT_OPERATOR(OP,COND,EXC)\
         template<class T,class U>\
         Int<Get_Int_Type<T,U>> operator OP(const Int<T>& t,const Int<U>& u){\
             if(COND)throw EXC;\
@@ -81,6 +81,17 @@ namespace PROJECT_NAME{
         Int<Get_Int_Type<T,U>> operator OP(const Int<T>& t,U u){\
             return t OP Int<U>(u);\
         }
+#define DEFINE_ASSIGN_OPERATOR(OP,COND,EXC)\
+        template<class T>\
+        Int<T>& operator OP(Int<T>& t,const Int<T>& u){\
+            if(COND)throw EXC;\
+            t.value OP u.value;\
+            return t;\
+        }\
+        template<class T>\
+        Int<T>& operator OP(Int<T>& t,T u){\
+            return t OP Int<T>(u);\
+        }
 
     DEFINE_INT_OPERATOR(+,false,"")
     DEFINE_INT_OPERATOR(-,false,"")
@@ -92,5 +103,16 @@ namespace PROJECT_NAME{
     DEFINE_INT_OPERATOR(&,false,"")
     DEFINE_INT_OPERATOR(|,false,"")
     DEFINE_INT_OPERATOR(^,false,"")
+    DEFINE_ASSIGN_OPERATOR(+=,false,"")
+    DEFINE_ASSIGN_OPERATOR(-=,false,"")
+    DEFINE_ASSIGN_OPERATOR(*=,false,"")
+    DEFINE_ASSIGN_OPERATOR(/=,u.value==0,divbyzero_exception("DIV By ZERO"))
+    DEFINE_ASSIGN_OPERATOR(%=,u.value==0,divbyzero_exception("MOD By ZERO"))
+    DEFINE_ASSIGN_OPERATOR(<<=,u.value>sizeof(T)*8,std::invalid_argument("too large number"))
+    DEFINE_ASSIGN_OPERATOR(>>=,u.value>sizeof(T)*8,std::invalid_argument("too large number"))
+    DEFINE_ASSIGN_OPERATOR(&=,false,"")
+    DEFINE_ASSIGN_OPERATOR(|=,false,"")
+    DEFINE_ASSIGN_OPERATOR(^=,false,"")
 #undef DEFINE_INT_OPERATOR
+#undef DEFINE_ASSIGN_OPERATOR
 }

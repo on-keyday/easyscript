@@ -94,8 +94,8 @@ namespace PROJECT_NAME{
     struct Deserializer{
     private:
         using RBuf=std::remove_reference_t<Buf>;
-        using Hold=std::conditional_t<std::is_reference_v<Buf>,Refer<RBuf>,Buf>;
-        Reader<Hold> r;
+        //using Hold=std::conditional_t<std::is_reference_v<Buf>,Refer<RBuf>,Buf>;
+        Reader<Buf> r;
     public:
         Deserializer(RBuf& in):r(in){}
 
@@ -192,8 +192,23 @@ namespace PROJECT_NAME{
             return r.ceof();
         }
 
-        Reader<Hold>& base_reader(){
+        Reader<Buf>& base_reader(){
             return r;
+        }
+
+    /*private:
+        RBuf& get_impl(RBuf& ref){
+            return ref;
+        }
+
+        RBuf& get_impl(Ref<RBuf>& ref){
+            return *ref;
+        }
+    public:*/
+
+        RBuf& get(){
+            //return get_impl(r.ref());
+            return r.ref();
         }
     };
     

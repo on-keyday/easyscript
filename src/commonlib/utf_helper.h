@@ -171,7 +171,7 @@ namespace PROJECT_NAME{
 
     template<class Buf,class Ret>
     bool utf8_read(Reader<Buf>* self,Ret& ret,int*& ctx,bool begin){
-        static_assert(sizeof(typename Reader<Buf>::char_type)==1);
+        static_assert(sizeof(typename Reader<Buf>::char_type)==1,"");
         if(begin){
             if(!ctx)return false;
             return true;
@@ -265,8 +265,8 @@ namespace PROJECT_NAME{
 
     template<class Buf,class Ret>
     bool utf8toutf32(Reader<Buf>* self,Ret& ret,int*& ctx,bool begin){
-        static_assert(sizeof(typename Reader<Buf>::char_type)==1);
-        static_assert(sizeof(ret[0])==4);
+        static_assert(sizeof(typename Reader<Buf>::char_type)==1,"");
+        static_assert(sizeof(ret[0])==4,"");
         if(begin){
             if(!ctx)return false;
             return true;
@@ -280,8 +280,8 @@ namespace PROJECT_NAME{
 
     template<class Buf,class Ret>
     bool utf32toutf8(Reader<Buf>* self,Ret& ret,int*& ctx,bool begin){
-        static_assert(sizeof(typename Reader<Buf>::char_type)==4);
-        static_assert(sizeof(ret[0])==1);
+        static_assert(sizeof(typename Reader<Buf>::char_type)==4,"");
+        static_assert(sizeof(ret[0])==1,"");
         using Char8=remove_cv_ref<decltype(ret[0])>;
         if(begin){
             if(!ctx)return false;
@@ -362,8 +362,8 @@ namespace PROJECT_NAME{
 
     template<class Buf,class Ret>
     bool utf16toutf32(Reader<Buf>* self,Ret& ret,int*& ctx,bool begin){
-        static_assert(sizeof(typename Reader<Buf>::char_type)==2);
-        static_assert(sizeof(ret[0])==4);
+        static_assert(sizeof(typename Reader<Buf>::char_type)==2,"");
+        static_assert(sizeof(ret[0])==4,"");
         if(begin){
             if(!ctx)return false;
             return true;
@@ -379,8 +379,8 @@ namespace PROJECT_NAME{
 
     template<class Buf,class Ret>
     bool utf32toutf16(Reader<Buf>* self,Ret& ret,int*& ctx,bool begin){
-        static_assert(sizeof(typename Reader<Buf>::char_type)==4);
-        static_assert(sizeof(ret[0])==2);
+        static_assert(sizeof(typename Reader<Buf>::char_type)==4,"");
+        static_assert(sizeof(ret[0])==2,"");
         if(begin){
             if(!ctx)return false;
             return true;
@@ -405,8 +405,8 @@ namespace PROJECT_NAME{
 
     template<class Buf,class Ret>
     bool utf8toutf16(Reader<Buf>* self,Ret& ret,int*& ctx,bool begin){
-        static_assert(sizeof(typename Reader<Buf>::char_type)==1);
-        static_assert(sizeof(ret[0])==2);
+        static_assert(sizeof(typename Reader<Buf>::char_type)==1,"");
+        static_assert(sizeof(ret[0])==2,"");
         if(begin){
             if(!ctx)return false;
             return true;
@@ -428,8 +428,8 @@ namespace PROJECT_NAME{
 
     template<class Buf,class Ret>
     bool utf16toutf8(Reader<Buf>* self,Ret& ret,int*& ctx,bool begin){
-        static_assert(sizeof(typename Reader<Buf>::char_type)==2);
-        static_assert(sizeof(ret[0])==1);
+        static_assert(sizeof(typename Reader<Buf>::char_type)==2,"");
+        static_assert(sizeof(ret[0])==1,"");
         if(begin){
             if(!ctx)return false;
             return true;

@@ -17,7 +17,7 @@ namespace PROJECT_NAME{
 
     template<class T>
     T translate_byte_as_is(const char* s) {
-        T res = 0;
+        T res = T();
         char* res_p = (char*)&res;
         for (auto i = 0u; i < sizeof(T); i++) {
             res_p[i] = s[i];
@@ -27,7 +27,7 @@ namespace PROJECT_NAME{
 
     template<class T>
     T translate_byte_reverse(const char* s) {
-        T res = 0;
+        T res = T();
         char* res_p = (char*)&res;
         auto k = 0ull;
         for (auto i = sizeof(T)-1;;i--) {
@@ -80,6 +80,7 @@ namespace PROJECT_NAME{
     struct Reader{
     private:
         Buf buf;
+        using RBuf=std::remove_reference_t<Buf>;
         using Char=remove_cv_ref<decltype(buf[0])>;
     public:
         using IgnoreHandler=bool(*)(Buf&,size_t&,size_t bufsize);
@@ -270,12 +271,16 @@ namespace PROJECT_NAME{
             ignore_cb=cb;
         }
 
-        Reader(const Buf& in,IgnoreHandler cb=nullptr):buf(in){
+        Reader(RBuf& in,IgnoreHandler cb=nullptr):buf(in){
+            ignore_cb=cb;
+        }
+
+        Reader(const RBuf& in,IgnoreHandler cb=nullptr):buf(in){
             //buf=in;
             ignore_cb=cb;
         }
 
-        Reader(Buf&& in,IgnoreHandler cb=nullptr)noexcept:buf(std::forward<Buf>(in)){
+        Reader(RBuf&& in,IgnoreHandler cb=nullptr)noexcept:buf(std::forward<RBuf>(in)){
             //buf=std::move(in);
             ignore_cb=cb;
         }
@@ -287,7 +292,7 @@ namespace PROJECT_NAME{
         } 
 
         Reader& operator=(Reader&& from){
-            buf=std::forward<Buf>(from.buf);
+            buf=std::forward<RBuf>(from.buf);
             move(std::forward<Reader>(from));
             return *this;
         }
@@ -410,7 +415,7 @@ namespace PROJECT_NAME{
         template<class T>
         size_t read_byte(T* res=nullptr,size_t size=sizeof(T),
         T (*endian_handler)(const char*)=translate_byte_as_is,bool strict=false){
-            static_assert(sizeof(Char)==1);
+            static_assert(sizeof(Char)==1,"");
             if(strict&&readable()<size)return 0;
             auto bs=buf_size(buf);
             size_t beginpos=pos;
@@ -442,7 +447,7 @@ namespace PROJECT_NAME{
             return pos-beginpos;
         }
 
-        Buf& ref(){/*refed=true;*/return buf;}
+        RBuf& ref(){/*refed=true;*/return buf;}
 
     private:
 
@@ -613,6 +618,14 @@ namespace PROJECT_NAME{
         }
         return size();
     }
+
+#if __cplusplus >= 201703L
+    template<class Buf>
+    Reader(Buf&)->Reader<Buf&>;
+
+    template<class Buf>
+    Reader(Buf&&)->Reader<Buf>;
+#endif
     
     template<class Buf>
     using cmpf_t=typename Reader<Buf>::cmp_default;

@@ -45,6 +45,7 @@ namespace PROJECT_NAME{
         virtual bool seek(size_t pos)=0;
 
         virtual bool readwhile(const Function<bool(Reader<Iproxy<IReader>>*,void*,void*,bool)>&,void*,void*)=0;
+        
         virtual const TypeId& type()const=0;
         virtual void* get_base()const=0;
         virtual size_t size()const=0;
@@ -156,7 +157,10 @@ namespace PROJECT_NAME{
         IReader_impl<Buf> impl;
     public:
         IR(Reader<Buf>& in):impl(in),r(impl){}
-        IReader& operator()()const{
+        IReader& operator()(){
+            return r;
+        }
+        operator IReader&(){
             return r;
         }
     };

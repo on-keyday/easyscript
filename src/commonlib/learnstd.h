@@ -85,6 +85,7 @@ namespace PROJECT_NAME{
         return typeinfo<const T*>();
     }
 
+#if __cplusplus >=201703L
     inline auto& typeid_type=typeinfo<TypeId>();
     inline auto& void_type=typeinfo<void>();
     inline auto& bool_type=typeinfo<bool>();
@@ -96,7 +97,7 @@ namespace PROJECT_NAME{
     inline auto& uint16_type=typeinfo<uint16_t>();
     inline auto& uint32_type=typeinfo<uint32_t>();
     inline auto& uint64_type=typeinfo<uint64_t>();
-
+#endif
     struct Anything{
     private:
         struct BaseTy{
@@ -136,8 +137,8 @@ namespace PROJECT_NAME{
         }
 
         template<class T>
-        Anything(const T* in){
-            hold=new HolderTy<const T*>(in);
+        Anything(T* in){
+            hold=new HolderTy<T*>(in);
         }
         /*
         template<class T>
@@ -147,7 +148,7 @@ namespace PROJECT_NAME{
 
         template<class T>
         Anything(T&& in){
-            hold=new HolderTy(std::forward<T>(in));
+            hold=new HolderTy<T>(std::forward<T>(in));
         }
 
         //Anything(Anything*)=delete;
@@ -167,7 +168,7 @@ namespace PROJECT_NAME{
         }
 
         const TypeId& type()const{
-            if(!hold)return void_type;
+            if(!hold)return typeinfo<void>();
             return hold->type();
         }
     private:
@@ -324,15 +325,32 @@ namespace PROJECT_NAME{
         struct FuncBase{
             virtual Ret operator()(Args&&... args)=0;
         };
+
+        using FuncPtrType=Ret(*)(Args...);
+        template<class T>
+        using MemberPtrType=Ret(T::*)(Args...);
+
         template<class T>
         struct FuncHolder:FuncBase{
             T t;
             FuncHolder(T&& in):t(std::move(in)){}
-            Ret operator()(Args&&... args){
+            Ret operator()(Args&&... args)override{
                 return t(std::forward<Args>(args)...);
             }
         };
-        using FuncPtrType=Ret(*)(Args...);
+
+        template<class T>
+        struct MemberHolder:FuncBase{
+            T* self;
+            MemberPtrType<T> ptr;
+
+            MemberHolder(T* s,MemberPtrType<T> p):self(s),ptr(p){}
+            Ret operator()(Args&&... args)override{
+                return (self->*ptr)(std::forward<Args>(args)...);
+            }
+        };
+
+        
 
         union{
             FuncBase* base=nullptr;
@@ -344,16 +362,25 @@ namespace PROJECT_NAME{
         constexpr Function():type(FType::none){}
 
         Function(FuncPtrType in):funcp(in),type(FType::ptr){}
+        
+        template<class T>
+        Function(T* self,MemberPtrType<T> ptr):type(FType::obj){
+            base=new MemberHolder<T>(self,ptr);
+        }
 
         template<class Obj>
         Function(Obj&& obj):type(FType::obj){
             base=new FuncHolder<Obj>(std::move(obj));
         }
 
-        Function& operator=(Function&& in){
+        void destruct(){
             if(type==FType::obj){
                 delete base;
             }
+            base=nullptr;
+        }
+
+        Function& operator=(Function&& in){
             base=in.base;
             in.base=nullptr;
             type=in.type;
@@ -366,7 +393,7 @@ namespace PROJECT_NAME{
                 return funcp(std::forward<Args>(args)...);
             }
             else if(type==FType::obj){
-                return base->operator()(std::forward<Args>(args)...);
+                return (*base)(std::forward<Args>(args)...);
             }
             throw "no function holds";
         }
@@ -380,11 +407,15 @@ namespace PROJECT_NAME{
         }
     };
 
+#if __cplusplus >=201703L
     template<class Ret,class... Args>
     Function(Ret(*)(Args...)) -> Function<Ret(Args...)>;
 
+    template<class T,class Ret,class... Args>
+    Function(T*,Ret(T::*)(Args...)) ->Function<Ret(Args...)>;
+
     template<class F>
     Function(F)->Function<F>;
-
+#endif
     
 }

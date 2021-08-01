@@ -6,10 +6,14 @@
 #include<stddef.h>
 #include<mutex>
 
+#ifdef __EMSCRIPTEN__
+#include<iostream>
+#endif
+
 #ifdef _WIN32
 #include<Windows.h>
 #include<io.h>
-#elif defined(__linux__)||defined(__APPLE__)||defined(__ANDROID__)
+#elif defined(__linux__)||defined(__APPLE__)||defined(__ANDROID__)||defined(__EMSCRIPTEN__)
 #include<sys/mman.h>
 #include <fcntl.h>
 #include<unistd.h>
@@ -110,7 +114,9 @@ namespace PROJECT_NAME{
             if(!filename)return false;
             FILE* tmp=nullptr;
             open_file(&tmp,filename);
-            if(!tmp)return false;
+            if(!tmp){
+                return false;
+            }
             auto fd=_fileno(tmp);
             if(!getfilesizebystat(fd,size_cache)){
                 fclose(tmp);
@@ -370,7 +376,7 @@ namespace PROJECT_NAME{
             return true;
         }
 
-#elif defined(__linux__)||defined(__APPLE__)||defined(__ANDROID__)
+#elif defined(__linux__)||defined(__APPLE__)||defined(__ANDROID__)||defined(__EMSCRIPTEN__)
         int fd=-1;
         long maplen=0;
 
@@ -449,7 +455,7 @@ namespace PROJECT_NAME{
             in.fd=-1;
             return true;
         }
-    #endif
+#endif
         char* place=nullptr;
         size_t _size=0;
 
@@ -535,9 +541,23 @@ namespace PROJECT_NAME{
     private:
         FILE* fp=nullptr;
     public:
-        FileWriter(const char* path,bool add=false){
+        template<class C>
+        FileWriter(C* path,bool add=false){
             open(path,add);
         }
+#ifdef _WIN32
+        bool open(const wchar_t* path,bool add=false){
+            FILE* tmp=nullptr;
+            _wfopen_s(&tmp,path,add?L"ab":L"wb");
+            if(!tmp){
+                return false;
+            }
+            close();
+            fp=tmp;
+            return true;
+        }
+#endif
+
         bool open(const char* path,bool add=false){
             FILE* tmp=nullptr;
             fopen_s(&tmp,path,add?"ab":"wb");
@@ -672,22 +692,4 @@ namespace PROJECT_NAME{
         }
     };
 
-#ifdef _WIN32
-
-    struct ConsoleWrapper{
-        struct Handle{
-            HANDLE h=INVALID_HANDLE_VALUE;
-            bool relfile=false;
-        };
-        Handle handles[3];
-        bool write(int num,const wchar_t* buf,DWORD size){
-            DWORD written=0;
-            return (bool)WriteConsoleW(handles[num].h,buf,size,&written,NULL);
-        }
-
-        bool read(int num,std::wstring& buf){
-            return false;
-        }
-    };
-#endif
 }

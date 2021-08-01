@@ -1,6 +1,9 @@
 #include<project_name.h>
 #include<reader.h>
 #include<basic_helper.h>
+#include<learnstd.h>
+#include<vector>
+
 namespace PROJECT_NAME{
 
     template<class Buf>
@@ -212,4 +215,122 @@ namespace PROJECT_NAME{
         }
     };
     
+
+    template<class T>
+    struct NoDestruct{
+    private:
+        union{
+            T t;
+            char buf[sizeof(T)]={0};
+        };
+
+    public:
+        NoDestruct(){
+            t=T();
+            //new(&t) T();
+        }
+
+        /*NoDestruct(const T& in){
+            t=in;
+        }
+        
+        NoDestruct(T&& in){
+            t=std::forward<T>(in);
+            //new(&t) T(make_T(std::forward<I>(in)));
+        }*/
+
+        ~NoDestruct()noexcept{}
+
+        T& operator()(){
+            return t;
+        }
+
+        operator T&(){
+            return t;
+        }
+    };
+
+
+    template<class Buf,template<class ...>class Vec=std::vector>
+    struct Stack{
+    private:
+        Serializer<Buf&> writer;
+        Deserializer<Reverse<Buf>> reader;
+        Buf& bufref;
+        Vec<Ref<const TypeId>> types;
+
+        template<class T>
+        void assign(NoDestruct<T>& obj,T& in){
+            obj()=in;
+        }
+
+        template<class T>
+        void assign(NoDestruct<T>& obj,T&& in){
+            obj()=std::forward<T>(in);
+        }
+
+    public:
+        Stack():reader(Buf()),writer(reader.get().buf),bufref(reader.get().buf){}
+    private:
+        template<class T>
+        size_t push_detail(T&& in){
+            size_t ret=stack_ptr();
+            using RT=std::remove_reference_t<T>;
+            NoDestruct<RT> obj;
+            assign(obj,std::forward<T>(in));
+            writer.write(obj());
+            types.push_back(typeinfo<T>());
+            return ret;
+        }
+    public:
+        template<class T>
+        size_t push(T&& in){
+            return push_detail(std::forward<T>(in));
+        }
+
+        template<class T>
+        size_t push(T* in){
+            return push_detail(std::forward<T*>(in));
+        }
+
+        size_t stack_ptr()const{
+            return bufref.size();
+        }
+    private:
+        void remove_ext(size_t count){
+            for(size_t i=0;i<count;i++){
+                bufref.pop_back();
+            }
+        }
+
+        template<class T>
+        bool pop_detail(T& out){
+            if(!reader.read_reverse(out)){
+                return false;
+            }
+            remove_ext(sizeof(T));
+            reader.base_reader().seek(0);
+            types.pop_back();
+            return true;
+        }
+
+    public:
+        template<class T>
+        bool pop(T& out){
+            if(!types.size())return false;
+            if((*types.back()).get_size()!=typeinfo<T>().get_size())return false;
+            return pop_detail(out);
+        }
+
+        template<class T>
+        bool pop_strict(T& out){
+            if(!types.size())return false;
+            if((*types.back())!=typeinfo<T>())return false;
+            return pop_detail(out);
+        }
+
+        Buf& raw(){
+            return bufref;
+        }
+    };
 }

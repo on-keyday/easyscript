@@ -1,3 +1,10 @@
+/*
+    Copyright (c) 2021 on-keyday
+    Released under the MIT license
+    https://opensource.org/licenses/mit-license.php
+*/
+
+#pragma once
 #include <fstream>
 #include <iostream>
 #include <sstream>
@@ -118,6 +125,7 @@ namespace PROJECT_NAME {
         std::ostream& out;
 #endif
        public:
+        using char_type = typename std::remove_reference_t<decltype(out)>::char_type;
         CoutWrapper(decltype(out) st)
             : out(st) {}
 
@@ -169,9 +177,14 @@ namespace PROJECT_NAME {
             return *this;
         }
 
-        template <class C>
-        bool open(const C& in) {
+        bool open(const std::string& in) {
+#if _WIN32
+            std::wstring tmp;
+            Reader(in) >> tmp;
+            file.open(tmp);
+#else
             file.open(in);
+#endif
             return (bool)file;
         }
 
